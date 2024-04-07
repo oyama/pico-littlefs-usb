@@ -1,0 +1,8 @@
+[submodule "lib/littlefs"]
+	path = lib/littlefs
+	url = https://github.com/littlefs-project/littlefs.git
+	branch = master
+[submodule "lib/pico-sdk"]
+	path = lib/pico-sdk
+	url = https://github.com/raspberrypi/pico-sdk.git
+	branch = master
