@@ -1,3 +1,15 @@
+/*
+ * Raspberry Pi Pico littlefs USB Flash Memory Interface
+ *
+ * Every time you press the BOOTSEL button on the Raspberry Pi Pico,
+ * append a log to the littlefs `SENSOR.TXT`. The host PC can mount
+ * the Pico like a USB Mass storage class flash memory device and
+ * read `SENSOR.TXT`.
+ * Hold the button down for 10 seconds to format Pico's flash memory.
+ *
+ * Copyright 2024, Hiroyuki OYAMA. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
 #include <bsp/board.h>
 #include <pico/stdlib.h>
 #include <stdlib.h>

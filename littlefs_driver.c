@@ -1,3 +1,9 @@
+/*
+ * Driver for Raspberry Pi Pico on-board flash with littlefs file system
+ *
+ * Copyright 2024, Hiroyuki OYAMA. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
 #include <hardware/flash.h>
 #include <hardware/sync.h>
 #include <hardware/regs/addressmap.h>

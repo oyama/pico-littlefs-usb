@@ -1,5 +1,8 @@
 /*
  * USB mass storage class driver that mimics littlefs to FAT12 file system.
+ *
+ * Copyright 2024, Hiroyuki OYAMA. All rights reserved.
+ * SPDX-License-Identifier: BSD-3-Clause
  */
 #include <math.h>
 #include <bsp/board.h>
