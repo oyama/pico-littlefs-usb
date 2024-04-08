@@ -28,7 +28,6 @@ Current implementation has several limitations:
 - Read-only Access from USB: The USB interface supports read-only access to the littlefs.
 - Limited File Size: File sizes are limited due to various constraints.
 - No file update detection: The host PC cannot notice that the microcontroller has updated the file while it is mounted. Remounting will reflect the update.
-- Supports only FAT Short File Names: Only FAT short file names (8+3 characters) are supported. Implementing FAT long file names could address this limitation.
 - Visibility of Root Directory Files: Only files with short filenames (8+3) placed directly in the littlefs root directory are visible from the USB side.
 - Unrefactored Source Code: The source code has not undergone refactoring.
 
