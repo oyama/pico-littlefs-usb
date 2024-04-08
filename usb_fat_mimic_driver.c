@@ -374,7 +374,7 @@ static void set_LFN_name123(fat_lfn_t *dir, const uint8_t *filename) {
     size_t l;
     l = ascii_to_utf16le(utf16_buffer, sizeof(utf16_buffer), filename, strlen(filename));
 
-   // printf("  '%s'\n", filename);
+    //printf("  '%s'\n", filename);
 
     memcpy(&dir->LDIR_Name1, utf16_buffer + 0, sizeof(uint16_t) * 5);
     memcpy(&dir->LDIR_Name2, utf16_buffer + 5, sizeof(uint16_t) * 6);
@@ -396,6 +396,16 @@ static void set_LFN_name123(fat_lfn_t *dir, const uint8_t *filename) {
             dir->LDIR_Name3[i] = 0xFF;
             dir->LDIR_Name3[i+1] = 0xFF;
         }
+    }
+    if (l < 13 && l < 5) {
+        dir->LDIR_Name1[l * 2]     = 0x00;
+        dir->LDIR_Name1[l * 2 + 1] = 0x00;
+    } else if (l < 13 && l < 11) {
+        dir->LDIR_Name2[(l-5) * 2]     = 0x00;
+        dir->LDIR_Name2[(l-5) * 2 + 1] = 0x00;
+    } else if (l < 13) {
+        dir->LDIR_Name2[(l-5-6) * 2]     = 0x00;
+        dir->LDIR_Name2[(l-5-6) * 2 + 1] = 0x00;
     }
     //print_block((uint8_t *)dir, 32);
 }
@@ -469,7 +479,7 @@ static void mimic_root_dir_entry(void *buffer, uint32_t bufsize) {
                     root_long_dir_entry->LDIR_Ord = lfn_ord;
                     root_long_dir_entry->LDIR_Attr = 0x0F;
                     root_long_dir_entry->LDIR_Type = 0x00;
-                    root_long_dir_entry->LDIR_Chksum = 0x00;
+                    root_long_dir_entry->LDIR_Chksum = create_fat_sfn_check_sum(sfn_dir.DIR_Name);
                     root_long_dir_entry->LDIR_FstClusLO[0] = 0x00;
                     root_long_dir_entry->LDIR_FstClusLO[1] = 0x00;
                     num_entry++;
