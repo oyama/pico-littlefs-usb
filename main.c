@@ -10,6 +10,7 @@
  * Copyright 2024, Hiroyuki OYAMA. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  */
+
 #include <bsp/board.h>
 #include <pico/stdlib.h>
 #include <stdlib.h>
@@ -23,6 +24,14 @@ extern const struct lfs_config lfs_pico_flash_config;
 extern bool usb_device_enable;
 
 #define FILENAME  "SENSOR.TXT"
+#define README_TXT \
+"Raspberry Pi Pico littlefs USB Flash Memory Interface\n" \
+"\n" \
+"Every time you press the BOOTSEL button on the Raspberry Pi Pico,\n" \
+"append a log to the littlefs `SENSOR.TXT`. The host PC can mount\n" \
+"the Pico like a USB Mass storage class flash memory device and\n" \
+"read `SENSOR.TXT`.\n" \
+"Hold the button down for 10 seconds to format Pico's flash memory.\n"
 
 
 /*
@@ -32,7 +41,17 @@ static void test_filesystem_and_format_if_necessary(bool force_format) {
     lfs_t fs;
     if ((lfs_mount(&fs, &lfs_pico_flash_config) != 0) || force_format) {
         printf("Format the onboard flash memory with littlefs\n");
+
         lfs_format(&fs, &lfs_pico_flash_config);
+
+        lfs_mount(&fs, &lfs_pico_flash_config);
+        lfs_file_t f;
+        lfs_file_open(&fs, &f, "README.TXT", LFS_O_RDWR|LFS_O_CREAT);
+        lfs_file_write(&fs, &f, README_TXT, strlen(README_TXT));
+        lfs_file_close(&fs, &f);
+
+        lfs_file_open(&fs, &f, FILENAME, LFS_O_RDWR|LFS_O_CREAT);
+        lfs_file_close(&fs, &f);
     }
     lfs_unmount(&fs);
 }
