@@ -5,6 +5,15 @@ This project demonstrates mounting littlefs from a host PC via USB, allowing eas
 Littlefs is widely used as a reliable file system for microcontrollers. However, since this file system is not supported by ordinary host PCs, special software and procedures are required for file read and write operations. The core idea of the project is to add an intermediate conversion layer on the USB Mass Storage Class device driver of the microcontroller to mimic littlefs as a FAT file system. This allows littlefs to be manipulated from the host PC as if it were a USB flash drive with a common FAT file system. Currently, only read access is available from the host PC. It may be possible to support writing as well, but it is still unclear if it can be done seamlessly.
 The only footprint added to the microcontroller is RAM that holds the first 3 blocks (3x512 bytes) of FAT12.
 
+## Demonstration Overview
+
+The demo works as follows:
+
+- Each time the BOOTSEL button is clicked, the number of clicks is added to the `SENSOR.TXT` file in the littlefs file system.
+- The first time the BOOTSEL button is clicked on Pico, it starts as a USB stick.
+- When the Pico is connected to the host PC via USB, it will be mounted as a read-only USB flash drive with a FAT12 file system.
+- Holding down the BOOTSEL button for 10 seconds will format the littlefs file system.
+
 ## Build and Installation
 
 Prepare a single Raspberry Pi Pico or Pico W, and a build environment using the [pico-sdk](https://github.com/raspberrypi/pico-sdk).

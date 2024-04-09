@@ -3,9 +3,6 @@
 
 #include <hardware/gpio.h>
 #include <hardware/structs/ioqspi.h>
-#include <hardware/structs/sio.h>
-#include <hardware/sync.h>
-#include <pico/stdlib.h>
 
 
 bool __no_inline_not_in_flash_func(bb_get_bootsel_button)() {

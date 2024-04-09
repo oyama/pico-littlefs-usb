@@ -7,7 +7,6 @@
 #include <hardware/flash.h>
 #include <hardware/sync.h>
 #include <hardware/regs/addressmap.h>
-#include <pico/stdio.h>
 #include <lfs.h>
 
 

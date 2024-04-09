@@ -10,13 +10,11 @@
  * Copyright 2024, Hiroyuki OYAMA. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  */
-
-#include <bsp/board.h>
-#include <pico/stdlib.h>
 #include <stdlib.h>
 #include <string.h>
+#include <bsp/board.h>
+#include <pico/stdlib.h>
 #include <tusb.h>
-
 #include <lfs.h>
 #include "bootsel_button.h"
 
