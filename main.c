@@ -20,8 +20,8 @@
 #include <lfs.h>
 #include "bootsel_button.h"
 
-extern const struct lfs_config lfs_pico_flash_config;
-extern bool usb_device_enable;
+extern const struct lfs_config lfs_pico_flash_config;  // littlefs_driver.c
+extern bool usb_device_enable;                         // usb_msc_driver.c
 
 #define FILENAME  "SENSOR.TXT"
 #define README_TXT \

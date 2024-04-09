@@ -17,14 +17,15 @@ pico_sdk_init()
 add_executable(littlefs-usb
   main.c
   littlefs_driver.c
-  usb_fat_mimic_driver.c
+  usb_msc_driver.c
   usb_descriptors.c
+  mimic_fat.c
 )
 target_link_libraries(littlefs-usb
-  pico_stdlib
   hardware_flash
   hardware_sync
   littlefs
+  pico_stdlib
   tinyusb_additions
   tinyusb_board
   tinyusb_device
@@ -33,7 +34,7 @@ target_link_libraries(littlefs-usb
 target_include_directories(littlefs-usb
   PRIVATE
   lib/littlefs
-  ${CMAKE_CURRENT_LIST_DIR}
+  ${CMAKE_CURRENT_LIST_DIR}/include
 )
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DPICO_USE_MALLOC_MUTEX=1")
