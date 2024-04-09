@@ -37,10 +37,10 @@ Some limitations arise from unimplemented features, while others may not be feas
 
 FAT12 is a very simple file system and can be easily mimicked; depending on the location of the block device requested by the USB host, the microcontroller assembles and returns the appropriate FAT12 block.
 
-- Block 0: Returns static FAT12 boot block.
+- Block 0: `mimic_fat_boot_sector()`. Returns static FAT12 boot block.
 - Block 1: `mimic_fat_table()`. Returns a mimicked FAT table, which searches the littlefs root directory and constructs information about the storage location on the FAT file system based on the file size of each file.
-- Block 2: `mimic_root_dir_entry()`. Returns the mimicked root directory entry; searches the littlefs root directory and registers the FAT file entry.
-- Block 3 and later: `mimic_file_entry()`. Returns a file block in littlefs. Searches the FAT root directory entry that holds the requested block and gets the file name and offset on littlefs. opens the file in littlefs and returns the data at the offset position.
+- Block 2: `mimic_fat_root_dir_entry()`. Returns the mimicked root directory entry; searches the littlefs root directory and registers the FAT file entry.
+- Block 3 and later: `mimic_fat_file_entry()`. Returns a file block in littlefs. Searches the FAT root directory entry that holds the requested block and gets the file name and offset on littlefs. opens the file in littlefs and returns the data at the offset position.
 
 ## Reference
 
