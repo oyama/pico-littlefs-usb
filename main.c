@@ -22,6 +22,7 @@ extern const struct lfs_config lfs_pico_flash_config;  // littlefs_driver.c
 extern bool usb_device_enable;                         // usb_msc_driver.c
 
 #define FILENAME  "SENSOR.TXT"
+
 #define README_TXT \
 "Raspberry Pi Pico littlefs USB Flash Memory Interface\n" \
 "\n" \
@@ -50,6 +51,12 @@ static void test_filesystem_and_format_if_necessary(bool force_format) {
 
         lfs_file_open(&fs, &f, FILENAME, LFS_O_RDWR|LFS_O_CREAT);
         lfs_file_close(&fs, &f);
+        /*
+        lfs_mkdir(&fs, "Activity");
+        lfs_file_open(&fs, &f, "Activity/Configuration.txt", LFS_O_RDWR|LFS_O_CREAT);
+        lfs_file_write(&fs, &f, "Sub directory\n", 14);
+        lfs_file_close(&fs, &f);
+        */
     }
     lfs_unmount(&fs);
 }
