@@ -48,15 +48,6 @@ static void test_filesystem_and_format_if_necessary(bool force_format) {
         lfs_file_open(&fs, &f, "README.TXT", LFS_O_RDWR|LFS_O_CREAT);
         lfs_file_write(&fs, &f, README_TXT, strlen(README_TXT));
         lfs_file_close(&fs, &f);
-
-        lfs_file_open(&fs, &f, FILENAME, LFS_O_RDWR|LFS_O_CREAT);
-        lfs_file_close(&fs, &f);
-        /*
-        lfs_mkdir(&fs, "Activity");
-        lfs_file_open(&fs, &f, "Activity/Configuration.txt", LFS_O_RDWR|LFS_O_CREAT);
-        lfs_file_write(&fs, &f, "Sub directory\n", 14);
-        lfs_file_close(&fs, &f);
-        */
     }
     lfs_unmount(&fs);
 }
