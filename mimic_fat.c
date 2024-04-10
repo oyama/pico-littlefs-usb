@@ -9,6 +9,10 @@
 
 extern const struct lfs_config lfs_pico_flash_config;  // littlefs_driver.c
 
+static const int FAT_SHORT_NAME_MAX = 11;
+static const int FAT_SHORT_8x3_MAX = 8 + 3 + 1;
+static const int FAT_LONG_FILENAME_CHUNK_MAX = 13;
+
 static uint8_t fat_disk_image[1][DISK_BLOCK_SIZE] = {
   //------------- Block0: Boot Sector -------------//
   {
@@ -51,27 +55,13 @@ static uint8_t fat_disk_image[1][DISK_BLOCK_SIZE] = {
   }
 };
 
-static uint8_t fat_table[512] = {
+static uint8_t fat_table[DISK_BLOCK_SIZE] = {
     0xF8, 0xFF, 0xFF, 0xFF, 0x0F
 };
 
-static fat_dir_entry_t root_dir_entry[16] = {
+static fat_dir_entry_t root_dir_entry[DISK_BLOCK_SIZE / sizeof(fat_dir_entry_t)] = {
   { "littlefsUSB", 0x08, 0x00, 0x00, 0x0000, 0x0000, 0x0000, 0x0000, 0x4F6D, 0x6543, 0x0000, 0x00000000 },
 };
-
-static void print_block(uint8_t *buffer, size_t l) {
-    for (size_t i = 0; i < l; ++i) {
-        if (isalnum(buffer[i])) {
-            printf("'%c' ", buffer[i]);
-        } else {
-            printf("0x%02x", buffer[i]);
-        }
-        if (i % 16 == 15)
-            printf("\n");
-        else
-            printf(", ");
-    }
-}
 
 static size_t ascii_to_utf16le(uint16_t *dist, size_t dist_size, const uint8_t *src, size_t src_size) {
     size_t utf16le_pos = 0;
@@ -133,6 +123,47 @@ static size_t utf16le_to_utf8(uint8_t *dist, size_t buffer_size, const uint16_t 
     return dist_len;
 }
 
+static void print_block(uint8_t *buffer, size_t l) {
+    for (size_t i = 0; i < l; ++i) {
+        if (isalnum(buffer[i])) {
+            printf("'%c' ", buffer[i]);
+        } else {
+            printf("0x%02x", buffer[i]);
+        }
+        if (i % 16 == 15)
+            printf("\n");
+        else
+            printf(", ");
+    }
+}
+
+static void print_dir_entry(void *buffer) {
+    uint8_t pbuffer[11+1];
+    fat_dir_entry_t *dir = (fat_dir_entry_t *)buffer;
+    printf("FAT dir_ent-----\n");
+    for (int i = 0; i < DISK_BLOCK_SIZE / sizeof(fat_dir_entry_t); i++) {
+        if (dir->DIR_Name[0] == '\0') {
+            break;
+        }
+        if ((dir->DIR_Attr & 0x0F) != 0x0F) {
+            memcpy(pbuffer, &dir->DIR_Name, 11);
+            pbuffer[11] = '\0';
+            printf(" name='%s' attr=0x%02X cluster=%u\n", pbuffer, dir->DIR_Attr, dir->DIR_FstClusLO);
+        } else {
+            fat_lfn_t *lfn = (fat_lfn_t *)dir;
+            uint16_t utf16le[13 + 1];
+            memcpy(utf16le, lfn->LDIR_Name1, 5*2);
+            memcpy(utf16le + 5, lfn->LDIR_Name2, 6*2);
+            memcpy(utf16le + 5 + 6, lfn->LDIR_Name3, 2*2);
+            utf16le[13] = '\0';
+            uint8_t utf8[13 + 1];
+            utf16le_to_utf8(utf8, sizeof(utf8), utf16le, 13);
+            printf(" name='%s' attr=0x%02X ord=0x%02X cluster=%u\n", utf8, lfn->LDIR_Attr, lfn->LDIR_Ord, dir->DIR_FstClusLO);
+        }
+        dir++;
+    }
+}
+
 static int is_fat_sfn_symbol(uint8_t c) {
     switch (c) {
     case '$':
@@ -177,7 +208,7 @@ static void trim_and_upper(uint8_t *name) {
 }
 
 static int fat_table_value(int cluster) {
-    uint16_t offset = (uint16_t)floor((float)cluster + ((float)cluster / 2)) % 512;
+    uint16_t offset = (uint16_t)floor((float)cluster + ((float)cluster / 2)) % DISK_BLOCK_SIZE;
     int16_t result = 0;
     if (cluster & 0x01) {
         result = (fat_table[offset] >> 4) | ((uint16_t)fat_table[offset + 1] << 4);
@@ -187,8 +218,15 @@ static int fat_table_value(int cluster) {
     return result;
 }
 
+static void print_fat_table(size_t l) {
+    printf("FAT table-------\n");
+    for (int i = 0; i < l; i++) {
+        printf(" cluster=%d fat=%03x\n", i, fat_table_value(i));
+    }
+}
+
 static void set_fat_short_filename(uint8_t *short_filename, const uint8_t *filename) {
-    uint8_t buffer[128];
+    uint8_t buffer[LFS_NAME_MAX + 1];
     strncpy(buffer, filename, sizeof(buffer));
 
     uint8_t *basename = strtok(buffer, ".");
@@ -197,7 +235,7 @@ static void set_fat_short_filename(uint8_t *short_filename, const uint8_t *filen
 }
 
 static void restore_from_short_filename(uint8_t *filename, const uint8_t *short_filename) {
-    uint8_t buffer[12];
+    uint8_t buffer[FAT_SHORT_NAME_MAX + 1];
     strncpy(buffer, short_filename, sizeof(buffer));
 
     uint8_t basename[8 + 1];
@@ -226,16 +264,15 @@ static void restore_from_short_filename(uint8_t *filename, const uint8_t *short_
 
 static void restore_from_short_dirname(uint8_t *filename, const uint8_t *short_dirname) {
     sprintf(filename, "%s", short_dirname);
-    size_t length = 11;
+    size_t length = FAT_SHORT_NAME_MAX;
     while (length > 0 && filename[length - 1] == ' ') {
         --length;
     }
     filename[length] = '\0';
 }
 
-
 static bool is_short_filename_file(uint8_t *filename) {
-    uint8_t buffer[256];
+    uint8_t buffer[LFS_NAME_MAX + 1];
     strncpy(buffer, filename, sizeof(buffer));
     uint8_t *name = (uint8_t *)strtok(buffer, ".");
     if (strlen(name) > 8) {
@@ -272,12 +309,12 @@ static bool is_short_filename_file(uint8_t *filename) {
 }
 
 static bool is_short_filename_dir(uint8_t *filename) {
-    uint8_t buffer[256];
+    uint8_t buffer[LFS_NAME_MAX + 1];
     strncpy(buffer, filename, sizeof(buffer));
-    if (strlen(filename) > 11) {
+    if (strlen(filename) > FAT_SHORT_NAME_MAX) {
         return false;
     }
-    for (int i = 0; i < 11; i++) {
+    for (int i = 0; i < FAT_SHORT_NAME_MAX; i++) {
         if (filename[i] == '\0') {
             break;
         }
@@ -291,10 +328,9 @@ static bool is_short_filename_dir(uint8_t *filename) {
     return true;
 }
 
-
 static void create_shortened_short_filename(uint8_t *sfn, const uint8_t *long_filename) {
-    uint8_t buffer[256];
-    uint8_t short_filename[12];
+    uint8_t buffer[LFS_NAME_MAX + 1];
+    uint8_t short_filename[FAT_SHORT_NAME_MAX + 1];
     strncpy(buffer, long_filename, sizeof(buffer));
     trim_and_upper(buffer);
     uint8_t *name = strtok(buffer, ".");
@@ -304,32 +340,30 @@ static void create_shortened_short_filename(uint8_t *sfn, const uint8_t *long_fi
     uint8_t *ext = strtok(NULL, ".");
     ext[3] = '\0';
     snprintf(short_filename, sizeof(short_filename), "%-8s%-3s", name, ext);
-    memcpy(sfn, short_filename, 11);
+    memcpy(sfn, short_filename, FAT_SHORT_NAME_MAX);
 }
 
-
 static void create_shortened_short_filename_dir(uint8_t *sfn, const uint8_t *long_filename) {
-    uint8_t buffer[256];
-    uint8_t short_filename[12];
+    uint8_t buffer[LFS_NAME_MAX + 1];
+    uint8_t short_filename[FAT_SHORT_NAME_MAX + 1];
 
     strncpy(buffer, long_filename, sizeof(buffer));
     trim_and_upper(buffer);
     snprintf(short_filename, sizeof(short_filename), "%-11s", buffer);
-    memcpy(sfn, short_filename, 11);
+    memcpy(sfn, short_filename, FAT_SHORT_NAME_MAX);
 }
-
 
 static uint8_t filename_check_sum(const uint8_t *filename) {
     uint8_t i, sum;
 
-    for (i = sum = 0; i < 11; i++) {
+    for (i = sum = 0; i < FAT_SHORT_NAME_MAX; i++) {
         sum = (sum >> 1) + (sum << 7) + filename[i];
     }
     return sum;
 }
 
 static void set_LFN_name123(fat_lfn_t *dir, const uint8_t *filename) {
-    uint16_t utf16_buffer[13];
+    uint16_t utf16_buffer[FAT_LONG_FILENAME_CHUNK_MAX];
     size_t l;
     memset(utf16_buffer, 0, sizeof(utf16_buffer));
     l = ascii_to_utf16le(utf16_buffer, sizeof(utf16_buffer), filename, strlen(filename));
@@ -355,13 +389,13 @@ static void set_LFN_name123(fat_lfn_t *dir, const uint8_t *filename) {
             dir->LDIR_Name3[i+1] = 0xFF;
         }
     }
-    if (l < 13 && l < 5) {
+    if (l < FAT_LONG_FILENAME_CHUNK_MAX && l < 5) {
         dir->LDIR_Name1[l * 2]     = 0x00;
         dir->LDIR_Name1[l * 2 + 1] = 0x00;
-    } else if (l < 13 && l < 11) {
+    } else if (l < FAT_LONG_FILENAME_CHUNK_MAX && l < FAT_SHORT_NAME_MAX) {
         dir->LDIR_Name2[(l-5) * 2]     = 0x00;
         dir->LDIR_Name2[(l-5) * 2 + 1] = 0x00;
-    } else if (l < 13) {
+    } else if (l < FAT_LONG_FILENAME_CHUNK_MAX) {
         dir->LDIR_Name3[(l-5-6) * 2]     = 0x00;
         dir->LDIR_Name3[(l-5-6) * 2 + 1] = 0x00;
     }
@@ -374,7 +408,7 @@ static void set_LFN_name123(fat_lfn_t *dir, const uint8_t *filename) {
  */
 static bool find_lfs_by_request_block(lfs_t *fs,
                                       uint32_t request_block,
-                                      uint32_t *cluster,
+                                      uint16_t *cluster,
                                       const char *directory,
                                       uint8_t *lfs_filename,
                                       uint32_t *lfs_offset,
@@ -399,7 +433,7 @@ static bool find_lfs_by_request_block(lfs_t *fs,
     }
 
     while (true) {
-        uint8_t path[256];
+        uint8_t path[LFS_NAME_MAX + 1];
 
         err = lfs_dir_read(fs, &dir, &finfo);
         if (err < 0) {
@@ -433,10 +467,11 @@ static bool find_lfs_by_request_block(lfs_t *fs,
             }
 
             int i = 0;
-            for (int i = 0; finfo.size >= i * 512; i++) {
+            for (int i = 0; finfo.size >= i * DISK_BLOCK_SIZE; i++) {
                 if (*cluster == request_block - 1) {
+                    printf("     find request_block=%u cluster=%u '%s'\n", request_block, *cluster, finfo.name);
                     sprintf(lfs_filename, "%s/%s", directory, finfo.name);
-                    *lfs_offset = 512 * i;
+                    *lfs_offset = DISK_BLOCK_SIZE * i;
                     result = true;
                     break;
                 }
@@ -453,6 +488,7 @@ static bool find_lfs_by_request_block(lfs_t *fs,
 }
 
 static bool find_lfs_file(uint32_t request_block,
+                          uint16_t *cluster,
                           uint8_t *lfs_filename,
                           uint32_t *lfs_offset,
                           bool *is_dir)
@@ -471,17 +507,17 @@ static bool find_lfs_file(uint32_t request_block,
         return false;
     }
 
-    uint32_t cluster = 0;
-    bool result = find_lfs_by_request_block(&fs, request_block, &cluster, "", lfs_filename, lfs_offset, is_dir);
+    //uint32_t cluster = 0;
+    bool result = find_lfs_by_request_block(&fs, request_block, cluster, "", lfs_filename, lfs_offset, is_dir);
     lfs_unmount(&fs);
     return result;
 }
 
 void set_volume_label_entry(fat_dir_entry_t *dir, const char *name) {
-    uint8_t sfn_name[11+1];
+    uint8_t sfn_name[FAT_SHORT_NAME_MAX + 1];
     sprintf(sfn_name, "%-11s", name);
 
-    memcpy(dir->DIR_Name, sfn_name, 11);
+    memcpy(dir->DIR_Name, sfn_name, FAT_SHORT_NAME_MAX);
     dir->DIR_Attr = 0x08;
     dir->DIR_NTRes = 0;
     dir->DIR_CrtTimeTenth = 0;
@@ -496,10 +532,10 @@ void set_volume_label_entry(fat_dir_entry_t *dir, const char *name) {
 }
 
 static void set_directory_entry(fat_dir_entry_t *dir, const char *name, int cluster) {
-    uint8_t sfn_name[11+1];
+    uint8_t sfn_name[FAT_SHORT_NAME_MAX + 1];
     sprintf(sfn_name, "%-11s", name);
-    memcpy(dir->DIR_Name, sfn_name, 11);
-    dir->DIR_Attr = 0x10;
+    memcpy(dir->DIR_Name, sfn_name, FAT_SHORT_NAME_MAX);
+    dir->DIR_Attr = 0x10; // directory
     dir->DIR_NTRes = 0;
     dir->DIR_CrtTimeTenth = 0xC6;
     dir->DIR_CrtTime = LITTLE_ENDIAN16(0x526D);
@@ -514,7 +550,7 @@ static void set_directory_entry(fat_dir_entry_t *dir, const char *name, int clus
 
 static void set_file_entry(fat_dir_entry_t *dir, struct lfs_info *info, int cluster) {
     set_fat_short_filename(dir->DIR_Name, info->name);
-    dir->DIR_Attr = 0x20;
+    dir->DIR_Attr = 0x00;  //0x20;
     dir->DIR_NTRes = 0;
     dir->DIR_CrtTimeTenth = 0xC6;
     dir->DIR_CrtTime = LITTLE_ENDIAN16(0x526D);
@@ -549,13 +585,14 @@ static uint16_t number_of_subdirectory_clusters(lfs_t *fs, const uint8_t *path) 
             break;
         }
         if (info.type == LFS_TYPE_REG) {
-            // FIXME: check file size
-            result++;
+            for (int16_t size = info.size; size > 0; size -= DISK_BLOCK_SIZE) {
+                result++;
+            }
         } else if (info.type == LFS_TYPE_DIR) {
             if (strcmp(info.name, ".") == 0 || strcmp(info.name, "..") == 0) {
                 continue;
             }
-            uint8_t dir_name[256];
+            uint8_t dir_name[LFS_NAME_MAX + 1];
             sprintf(dir_name, "%s/%s", path, info.name);
             result++;
             result += number_of_subdirectory_clusters(fs, dir_name);
@@ -567,7 +604,7 @@ static uint16_t number_of_subdirectory_clusters(lfs_t *fs, const uint8_t *path) 
 }
 
 static void update_fat_table(uint16_t cluster, uint16_t value) {
-    uint16_t offset = (uint16_t)floor((float)cluster + ((float)cluster / 2)) % 512;
+    uint16_t offset = (uint16_t)floor((float)cluster + ((float)cluster / 2)) % DISK_BLOCK_SIZE;
     if (cluster & 0x01) {
         fat_table[offset] = (fat_table[offset] & 0x0F) | (value << 4);
         fat_table[offset + 1] = value >> 4;
@@ -578,15 +615,14 @@ static void update_fat_table(uint16_t cluster, uint16_t value) {
 
 }
 
-void create_fat_dir_entry(const uint8_t *path, uint32_t request_block, void *buffer, uint32_t bufsize) {
+void create_fat_dir_entry(const uint8_t *path, uint16_t cluster, uint32_t request_block, void *buffer, uint32_t bufsize) {
     printf("create_fat_dir_entry for request_block=%u, path=%s\n", request_block, path);
-    fat_dir_entry_t *entry, dir_entry[16];
+    fat_dir_entry_t *entry, dir_entry[DISK_BLOCK_SIZE / sizeof(fat_dir_entry_t)];
     memset(dir_entry, 0, sizeof(dir_entry));
     lfs_t fs;
     int err = lfs_mount(&fs, &lfs_pico_flash_config);
 
-    int num_entry = 0;
-    int file_entry = 0;
+    int num_entry = 1;
     if (strcmp(path, "/") == 0) {
         // root dir entry
         entry = root_dir_entry;
@@ -595,8 +631,7 @@ void create_fat_dir_entry(const uint8_t *path, uint32_t request_block, void *buf
         entry = dir_entry;
         set_directory_entry(&entry[0], ".", request_block - 1); // current dir
         set_directory_entry(&entry[1], "..", 0); // Root dir
-        num_entry = 1;
-        file_entry = 1;
+        num_entry = 2;
     }
     lfs_dir_t dir;
     lfs_dir_open(&fs, &dir, path);
@@ -614,80 +649,86 @@ void create_fat_dir_entry(const uint8_t *path, uint32_t request_block, void *buf
             if (info.type == LFS_TYPE_DIR && (strcmp(info.name, ".") == 0 || strcmp(info.name, "..") == 0)) {
                 continue;
             }
-            num_entry++;
-            file_entry++;
+
             if (is_short_filename_dir((uint8_t *)info.name)) {
-                printf("  create Short File Name dir entry '%s' -> '%s' cluster=%u\n", info.name, info.name, file_entry + 1);
-                set_directory_entry(&entry[num_entry], info.name, file_entry + 1);
+                printf("  create Short File Name dir entry '%s' -> '%s' cluster=%u\n", info.name, info.name, cluster);
+                set_directory_entry(&entry[num_entry], info.name, cluster);
             } else {
                 fat_dir_entry_t sfn_dir;
-                uint8_t short_filename[11 + 1 + 1];
-                uint8_t buffer2[124];
+                uint8_t buffer[FAT_SHORT_NAME_MAX + 1];
 
                 printf("  create Long File Name dir entry '%s'\n", info.name);
-                set_directory_entry(&sfn_dir, info.name, file_entry + 1);
+                set_directory_entry(&sfn_dir, info.name, cluster);
                 create_shortened_short_filename_dir(sfn_dir.DIR_Name, info.name);
+                memset(buffer, 0, sizeof(buffer));
+                memcpy(buffer, sfn_dir.DIR_Name, FAT_SHORT_NAME_MAX);
 
                 uint8_t check_sum = filename_check_sum(sfn_dir.DIR_Name);
-                int lfn_entry = floor((strlen(info.name) - 1) / 13);
+                int lfn_entry = floor((strlen(info.name) - 1) / FAT_LONG_FILENAME_CHUNK_MAX);
                 for (int i = lfn_entry; i >= 0; i--) {
                     uint8_t lfn_ord = i + 1;
-                    uint8_t lfn_chunk[14];
-                    uint8_t *head = (uint8_t *)&info.name[i * 13];
-                    strncpy(lfn_chunk, head, 13);
-                    lfn_chunk[13] = '\0';
+                    uint8_t lfn_chunk[FAT_LONG_FILENAME_CHUNK_MAX + 1];
+                    uint8_t *head = (uint8_t *)&info.name[i * FAT_LONG_FILENAME_CHUNK_MAX];
+                    strncpy(lfn_chunk, head, FAT_LONG_FILENAME_CHUNK_MAX);
+                    lfn_chunk[FAT_LONG_FILENAME_CHUNK_MAX] = '\0';
                     if (i == lfn_entry) {
                         lfn_ord |= 0x40;
                     }
                     set_long_file_entry(&entry[num_entry], lfn_chunk, lfn_ord, check_sum);
                     num_entry++;
                 }
-                memset(buffer2, 0, sizeof(buffer2));
-                memcpy(buffer2, sfn_dir.DIR_Name, 11);
-                printf("  create SFN linked to LFN '%s' -> '%s'\n", buffer2, info.name);
+                memset(buffer, 0, sizeof(buffer));
+                memcpy(buffer, sfn_dir.DIR_Name, FAT_SHORT_NAME_MAX);
+                printf("  create SFN linked to LFN '%s' -> '%s' cluster=%u\n", buffer, info.name, cluster);
                 memcpy(&entry[num_entry], &sfn_dir, sizeof(sfn_dir));
             }
-            file_entry += number_of_subdirectory_clusters(&fs, info.name);
+            uint16_t num_cluster = number_of_subdirectory_clusters(&fs, info.name);
+            num_entry += num_cluster;
+            cluster += num_cluster + 1;
 
         } else if (info.type == LFS_TYPE_REG) {
-            num_entry++;
-            file_entry++;
             if (is_short_filename_file((uint8_t *)info.name)) {
-                printf("  create Short File Name file entry '%s' -> '%s' cluster=%u\n", info.name, info.name, file_entry + 1);
+                printf("  create Short File Name file entry '%s' -> '%s' cluster=%u\n", info.name, info.name, cluster);
                 set_fat_short_filename(entry[num_entry].DIR_Name, info.name);
-                set_file_entry(&entry[num_entry], &info, file_entry + 1);
+                set_file_entry(&entry[num_entry], &info, cluster);
             } else {  // Long file name
                 fat_dir_entry_t sfn_dir;
-                uint8_t short_filename[11 + 1 + 1];
-                uint8_t buffer2[124];
+                uint8_t buffer[FAT_SHORT_NAME_MAX + 1];
 
                 // SET UNIQUE SHORT FILE NAME
-                set_file_entry(&sfn_dir, &info, file_entry + 1);
+                set_file_entry(&sfn_dir, &info, cluster);
                 create_shortened_short_filename(sfn_dir.DIR_Name, info.name);
 
                 printf("  create Long File Name file entry '%s'\n", info.name);
                 uint8_t check_sum = filename_check_sum(sfn_dir.DIR_Name);
-                int lfn_entry = floor((strlen(info.name) - 1) / 13);
+                int lfn_entry = floor((strlen(info.name) - 1) / FAT_LONG_FILENAME_CHUNK_MAX);
                 for (int i = lfn_entry; i >= 0; i--) {
                     uint8_t lfn_ord = i + 1;
-                    uint8_t lfn_chunk[14];
-                    uint8_t *head = (uint8_t *)&info.name[i * 13];
-                    strncpy(lfn_chunk, head, 13);
-                    lfn_chunk[13] = '\0';
+                    uint8_t lfn_chunk[FAT_LONG_FILENAME_CHUNK_MAX + 1];
+                    uint8_t *head = (uint8_t *)&info.name[i * FAT_LONG_FILENAME_CHUNK_MAX];
+                    strncpy(lfn_chunk, head, FAT_LONG_FILENAME_CHUNK_MAX);
+                    lfn_chunk[FAT_LONG_FILENAME_CHUNK_MAX] = '\0';
                     if (i == lfn_entry) {
                         lfn_ord |= 0x40;
                     }
                     set_long_file_entry(&entry[num_entry], lfn_chunk, lfn_ord, check_sum);
                     num_entry++;
                 }
-                memset(buffer2, 0, sizeof(buffer2));
-                memcpy(buffer2, sfn_dir.DIR_Name, 11);
-                printf("  create SFN linked to LFN '%s' -> '%s'\n", buffer2, info.name);
+                memset(buffer, 0, sizeof(buffer));
+                memcpy(buffer, sfn_dir.DIR_Name, FAT_SHORT_NAME_MAX);
+                printf("  create SFN linked to LFN '%s' -> '%s' cluster=%u\n", buffer, info.name, cluster);
                 memcpy(&entry[num_entry], &sfn_dir, sizeof(sfn_dir));
             }
+
+            num_entry++;
+            for (int16_t size = info.size; size > 0; size -= DISK_BLOCK_SIZE) {
+                cluster++;
+            }
+
         }
-        if (num_entry >= 16) {
-            printf("This implementation can't mimic more than 15 files\n");
+        if (num_entry >= DISK_BLOCK_SIZE / sizeof(fat_dir_entry_t)) {
+            printf("Cannot create directory entries that exceed the block size > %u\n",
+                   DISK_BLOCK_SIZE / sizeof(fat_dir_entry_t));
             break;
         }
     }
@@ -739,22 +780,23 @@ void mimic_fat_table(void *buffer, uint32_t bufsize) {
 
         if (info.type == LFS_TYPE_DIR) {
             cluster++;
-            uint16_t offset = (uint16_t)floor((float)cluster + ((float)cluster / 2)) % 512;
-            uint16_t entry = cluster + 1;
-            update_fat_table(cluster, cluster + 1);
+
+            uint16_t offset = (uint16_t)floor((float)cluster + ((float)cluster / 2)) % DISK_BLOCK_SIZE;
+            update_fat_table(cluster, 0xFFF);
             printf("  assign fat table cluster=%d dirname='%s'\n", cluster, info.name);
             uint16_t sub_clusters = number_of_subdirectory_clusters(&fs, info.name);
             for (int i = cluster + 1; i < cluster + sub_clusters + 1; i++) {
                 printf("  assign fat table cluster=%d dirname='%s' + files\n", i, info.name);
-                update_fat_table(i, i + 1);
+                update_fat_table(i, 0xFFF);
             }
             cluster += sub_clusters;
 
         } else if (info.type == LFS_TYPE_REG) {
             uint16_t size = info.size;
-            for (int16_t size = info.size; size > 0; size -= 512) {
+            for (int16_t size = info.size; size >= 0; size -= DISK_BLOCK_SIZE) {
                 cluster++;
-                update_fat_table(cluster, size > 512 ? cluster + 1 : 0xFFF);
+
+                update_fat_table(cluster, size >= DISK_BLOCK_SIZE ? cluster + 1: 0xFFF);
                 printf("  assign fat table cluster=%d filename='%s' size=%u\n", cluster, info.name, size);
             }
         }
@@ -763,6 +805,8 @@ void mimic_fat_table(void *buffer, uint32_t bufsize) {
     lfs_dir_close(&fs, &dir);
     lfs_unmount(&fs);
     memcpy(buffer, fat_table, bufsize);
+
+    print_fat_table(10);
 }
 
 /*
@@ -771,7 +815,10 @@ void mimic_fat_table(void *buffer, uint32_t bufsize) {
  */
 void mimic_fat_root_dir_entry(void *buffer, uint32_t bufsize) {
     printf("Request block=2 mimic_fat_root_dir_entry()\n");
-    return create_fat_dir_entry("/", 2, buffer, bufsize);
+    create_fat_dir_entry("/", 2, 2, buffer, bufsize);
+    print_dir_entry(buffer);
+    //print_block(buffer, 512);
+    return;
 }
 
 /*
@@ -781,29 +828,33 @@ void mimic_fat_root_dir_entry(void *buffer, uint32_t bufsize) {
  */
 void mimic_fat_file_entry(uint32_t request_block, void *buffer, uint32_t bufsize) {
     printf("Request block=%u mimic_fat_file_entry()\n", request_block);
-    uint8_t dummy[512] = "";
-    uint8_t filename[256];
+    uint8_t dummy[DISK_BLOCK_SIZE] = "";
+    uint8_t filename[LFS_NAME_MAX + 1];
     uint32_t offset = 0;
     bool is_dir = false;
+    uint16_t cluster = 0;
 
     if (fat_table_value(request_block - 1) == 0) {
         printf("  not assign fat table: %u\n", request_block);
         return;
     }
 
-    if (!find_lfs_file(request_block, filename, &offset, &is_dir)) {
-        printf("  mimic_fat_file_entry: request_block=%u File not found\n", request_block);
+    if (!find_lfs_file(request_block, &cluster, filename, &offset, &is_dir)) {
+        printf("  mimic_fat_file_entry: request_block=%u cluster=%u File not found\n", request_block, request_block - 1);
         return;
     }
     if (is_dir) {
-        printf("  mimic_fat_file_entry: request_block=%u, directory=\"%s\"\n", request_block, filename);
-        return create_fat_dir_entry(filename, request_block, buffer, bufsize);
+        printf("  mimic_fat_file_entry: request_block=%u  cluster=%u directory=\"%s\"\n", request_block, request_block - 1, filename);
+        // サブディレクトリに至る前に、clusterがいくつ消費されているか調べてから渡す必要がある
+        create_fat_dir_entry(filename, request_block, cluster, buffer, bufsize);
+        print_dir_entry(buffer);
+        return;
     }
 
     lfs_t fs;
     int err = lfs_mount(&fs, &lfs_pico_flash_config);
     lfs_file_t f;
-    printf("  mimic_fat_file_entry: request_block=%u, file=\"%s\" offset=%u\n", request_block, filename, offset);
+    printf("  mimic_fat_file_entry: request_block=%u cluster=%u file=\"%s\" offset=%u\n", request_block, request_block - 1, filename, offset);
     err = lfs_file_open(&fs, &f, filename, LFS_O_RDONLY);
     if (err < 0) {
         printf("can't open littlefs '%s' rc=%d\n", filename, err);
@@ -811,7 +862,7 @@ void mimic_fat_file_entry(uint32_t request_block, void *buffer, uint32_t bufsize
         return;
     }
 
-    uint8_t sector[512];
+    uint8_t sector[DISK_BLOCK_SIZE];
     lfs_file_seek(&fs, &f, offset, LFS_SEEK_SET);
     lfs_file_read(&fs, &f, sector, sizeof(sector));
     memcpy(buffer, sector, bufsize);
