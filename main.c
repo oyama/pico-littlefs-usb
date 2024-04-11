@@ -42,12 +42,13 @@ static void test_filesystem_and_format_if_necessary(bool force_format) {
         printf("Format the onboard flash memory with littlefs\n");
 
         lfs_format(&fs, &lfs_pico_flash_config);
-
+        /*
         lfs_mount(&fs, &lfs_pico_flash_config);
         lfs_file_t f;
         lfs_file_open(&fs, &f, "README.TXT", LFS_O_RDWR|LFS_O_CREAT);
         lfs_file_write(&fs, &f, README_TXT, strlen(README_TXT));
         lfs_file_close(&fs, &f);
+        */
     }
     lfs_unmount(&fs);
 }

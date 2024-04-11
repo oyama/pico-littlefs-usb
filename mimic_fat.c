@@ -743,7 +743,7 @@ void create_fat_dir_entry(const uint8_t *path, uint16_t cluster, uint32_t reques
  * Returns the boot sector of the FAT image when USB requests sector 0
  */
 void mimic_fat_boot_sector(void *buffer, uint32_t bufsize) {
-    printf("Request block=0 mimic_fat_boot_sector()\n");
+    printf("Read block=0 mimic_fat_boot_sector()\n");
 
     uint8_t const *addr = fat_disk_image[0];
     memcpy(buffer, addr, bufsize);
@@ -754,7 +754,7 @@ void mimic_fat_boot_sector(void *buffer, uint32_t bufsize) {
  * Build a FAT table based on littlefs files.
  */
 void mimic_fat_table(void *buffer, uint32_t bufsize) {
-    printf("Request block=1 mimic_fat_table()\n");
+    printf("Read block=1 mimic_fat_table()\n");
     lfs_t fs;
     int err = lfs_mount(&fs, &lfs_pico_flash_config);
     if (err < 0) {
@@ -814,7 +814,7 @@ void mimic_fat_table(void *buffer, uint32_t bufsize) {
  * Explore the littlefs root directory and build file information.
  */
 void mimic_fat_root_dir_entry(void *buffer, uint32_t bufsize) {
-    printf("Request block=2 mimic_fat_root_dir_entry()\n");
+    printf("Read block=2 mimic_fat_root_dir_entry()\n");
     create_fat_dir_entry("/", 2, 2, buffer, bufsize);
     print_dir_entry(buffer);
     //print_block(buffer, 512);
@@ -827,7 +827,7 @@ void mimic_fat_root_dir_entry(void *buffer, uint32_t bufsize) {
  * file name and the offset of the data to be returned.
  */
 void mimic_fat_file_entry(uint32_t request_block, void *buffer, uint32_t bufsize) {
-    printf("Request block=%u mimic_fat_file_entry()\n", request_block);
+    printf("Read block=%u mimic_fat_file_entry()\n", request_block);
     uint8_t dummy[DISK_BLOCK_SIZE] = "";
     uint8_t filename[LFS_NAME_MAX + 1];
     uint32_t offset = 0;
@@ -845,7 +845,6 @@ void mimic_fat_file_entry(uint32_t request_block, void *buffer, uint32_t bufsize
     }
     if (is_dir) {
         printf("  mimic_fat_file_entry: request_block=%u  cluster=%u directory=\"%s\"\n", request_block, request_block - 1, filename);
-        // サブディレクトリに至る前に、clusterがいくつ消費されているか調べてから渡す必要がある
         create_fat_dir_entry(filename, request_block, cluster, buffer, bufsize);
         print_dir_entry(buffer);
         return;
@@ -868,4 +867,71 @@ void mimic_fat_file_entry(uint32_t request_block, void *buffer, uint32_t bufsize
     memcpy(buffer, sector, bufsize);
     lfs_unmount(&fs);
     return;
+}
+
+static bool save_temporary_file(uint32_t request_block, void *buffer) {
+    return 1;
+}
+
+static bool compare_dir_entry_and_move_temporary_file_for_new_file(uint32_t request_block, void *buffer, uint8_t *dirname) {
+    fat_dir_entry_t orig[16];
+
+    create_fat_dir_entry(dirname, request_block - 1, request_block, (void *)orig, 512);
+    printf("----orig\n");
+    print_dir_entry((void *)orig);
+    printf("----new\n");
+    print_dir_entry(buffer);
+    if (memcmp(orig, buffer, sizeof(orig)) == 0) {
+        printf("  same dir_entry_t[]\n");
+        return true;
+    }
+    printf("  update dir_entry_t[] Extract the difference\n");
+
+    return true;
+}
+
+static bool update_lfs_file(uint8_t *filename, void *buffer, uint32_t offset) {
+    return true;
+}
+
+static bool save_existing_file_or_temporarily_save_for_new_file(uint32_t request_block, void *buffer) {
+    uint8_t filename[LFS_NAME_MAX + 1];
+    uint16_t cluster = 0;
+    bool is_dir = false;
+    uint32_t offset = 0;
+    printf("save_existing_file_or_temporarily_save_for_new_file: request_block=%u cluster=%u\n", request_block, request_block - 1);
+
+    if (fat_table_value(request_block - 1) == 0) {
+        printf("  not assign fat table, save to a temporary: %u\n", request_block);
+        return save_temporary_file(request_block, buffer);
+    }
+
+    if (!find_lfs_file(request_block, &cluster, filename, &offset, &is_dir)) {
+        printf("  request_block=%u cluster=%u filename='%s', File not found\n", request_block, request_block - 1, filename);
+        return false;
+    }
+    if (is_dir) {
+        printf("  request_block=%u cluster=%u directory=\"%s\"\n", request_block, request_block - 1, filename);
+        return compare_dir_entry_and_move_temporary_file_for_new_file(request_block, buffer, filename);
+    }
+    printf("  update_lfs_file: request_block=%u cluster=%u filename='%s' offset=%u\n", request_block, request_block - 1, filename, offset);
+    update_lfs_file(filename, buffer, offset);
+}
+
+void mimic_fat_write(uint8_t lun, uint32_t request_block, uint32_t offset, void *buffer, uint32_t bufsize) {
+    printf("Write block=%u offset=%u\n", request_block, offset);
+
+    if (request_block == 0) { // master boot record
+        return;
+    } else if (request_block == 1) { // FAT table
+        memcpy(fat_table, buffer, sizeof(fat_table));
+        printf("  mimic_fat_write: update_fat_table\n");
+        print_fat_table(32);
+    } else if (request_block == 2) { // root dir entry
+        printf("  mimic_fat_write: update root_dir_entry\n");
+        print_dir_entry(buffer);
+    } else { // data or directory entry
+        save_existing_file_or_temporarily_save_for_new_file(request_block, buffer);
+        print_block(buffer, 512);
+    }
 }

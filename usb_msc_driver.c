@@ -71,7 +71,7 @@ int32_t tud_msc_read10_cb(uint8_t lun, uint32_t lba, uint32_t offset, void* buff
 
 bool tud_msc_is_writable_cb (uint8_t lun) {
     (void) lun;
-    return false; // READ ONLY
+    return true;
 }
 
 int32_t tud_msc_write10_cb(uint8_t lun, uint32_t lba, uint32_t offset, uint8_t* buffer, uint32_t bufsize) {
@@ -80,7 +80,7 @@ int32_t tud_msc_write10_cb(uint8_t lun, uint32_t lba, uint32_t offset, uint8_t* 
 
     // out of ramdisk
     if ( lba >= DISK_BLOCK_NUM ) return -1;
-
+    mimic_fat_write(lun, lba, offset, buffer, bufsize);
     return (int32_t) bufsize;
 }
 
