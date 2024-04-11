@@ -902,20 +902,25 @@ static bool save_existing_file_or_temporarily_save_for_new_file(uint32_t request
     printf("save_existing_file_or_temporarily_save_for_new_file: request_block=%u cluster=%u\n", request_block, request_block - 1);
 
     if (fat_table_value(request_block - 1) == 0) {
+        printf("  add new file or directory\n");
         printf("  not assign fat table, save to a temporary: %u\n", request_block);
         return save_temporary_file(request_block, buffer);
     }
 
-    if (!find_lfs_file(request_block, &cluster, filename, &offset, &is_dir)) {
-        printf("  request_block=%u cluster=%u filename='%s', File not found\n", request_block, request_block - 1, filename);
-        return false;
-    }
-    if (is_dir) {
+    bool is_exists = find_lfs_file(request_block, &cluster, filename, &offset, &is_dir);
+    if (is_exists && is_dir) {
+        printf("  update dir entry, compare dir entry and move temporary file for new file\n");
         printf("  request_block=%u cluster=%u directory=\"%s\"\n", request_block, request_block - 1, filename);
         return compare_dir_entry_and_move_temporary_file_for_new_file(request_block, buffer, filename);
+    } else if (is_exists) {
+        printf("  update_lfs_file: request_block=%u cluster=%u filename='%s' offset=%u\n", request_block, request_block - 1, filename, offset);
+        update_lfs_file(filename, buffer, offset);
+        return true;
     }
-    printf("  update_lfs_file: request_block=%u cluster=%u filename='%s' offset=%u\n", request_block, request_block - 1, filename, offset);
-    update_lfs_file(filename, buffer, offset);
+    printf("  add dir_entry\n");
+    printf("  assign fat table, but not exists on lfs file: request_block=%u cluster=%u\n", request_block, request_block - 1);
+    printf("  save_temporary_file: request_block=%u cluster=%u\n", request_block, request_block - 1);
+    return save_temporary_file(request_block, buffer);
 }
 
 void mimic_fat_write(uint8_t lun, uint32_t request_block, uint32_t offset, void *buffer, uint32_t bufsize) {
@@ -929,7 +934,14 @@ void mimic_fat_write(uint8_t lun, uint32_t request_block, uint32_t offset, void 
         print_fat_table(32);
     } else if (request_block == 2) { // root dir entry
         printf("  mimic_fat_write: update root_dir_entry\n");
+        fat_dir_entry_t orig[16];
+        create_fat_dir_entry("/", request_block - 1, request_block, (void *)orig, 512);
+        printf("----orig\n");
+        print_dir_entry((void *)orig);
+        printf("----new\n");
         print_dir_entry(buffer);
+        // update root dir entry?
+
     } else { // data or directory entry
         save_existing_file_or_temporarily_save_for_new_file(request_block, buffer);
         print_block(buffer, 512);
