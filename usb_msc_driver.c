@@ -9,7 +9,7 @@
 
 
 static bool ejected = false;
-bool usb_device_enable = false;
+bool usb_device_enable = true;
 
 
 void tud_msc_inquiry_cb(uint8_t lun, uint8_t vendor_id[8], uint8_t product_id[16], uint8_t product_rev[4]) {
@@ -25,6 +25,8 @@ void tud_msc_inquiry_cb(uint8_t lun, uint8_t vendor_id[8], uint8_t product_id[16
 }
 
 bool tud_msc_test_unit_ready_cb(uint8_t lun) {
+    (void)lun;
+
     return usb_device_enable;
 }
 
@@ -51,7 +53,9 @@ bool tud_msc_start_stop_cb(uint8_t lun, uint8_t power_condition, bool start, boo
 }
 
 int32_t tud_msc_read10_cb(uint8_t lun, uint32_t lba, uint32_t offset, void* buffer, uint32_t bufsize) {
-    (void) lun;
+    (void)lun;
+    (void)offset;
+
     if ( lba >= DISK_BLOCK_NUM ) return -1;
 
     if (lba == 0) { // read Boot sector

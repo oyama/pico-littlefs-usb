@@ -19,7 +19,6 @@
 #include "bootsel_button.h"
 
 extern const struct lfs_config lfs_pico_flash_config;  // littlefs_driver.c
-extern bool usb_device_enable;                         // usb_msc_driver.c
 
 #define FILENAME  "SENSOR.TXT"
 
@@ -77,13 +76,11 @@ static void sensor_logging_task(void) {
         lfs_file_t f;
         lfs_file_open(&fs, &f, FILENAME, LFS_O_RDWR|LFS_O_APPEND|LFS_O_CREAT);
         uint8_t buffer[512];
-        snprintf(buffer, sizeof(buffer), "click=%d\n", count);
-        lfs_file_write(&fs, &f, buffer, strlen(buffer));
-        printf(buffer);
+        snprintf((char *)buffer, sizeof(buffer), "click=%d\n", count);
+        lfs_file_write(&fs, &f, buffer, strlen((char *)buffer));
+        printf((char *)buffer);
         lfs_file_close(&fs, &f);
         lfs_unmount(&fs);
-
-        usb_device_enable = true;  // Enable USB device
     }
     last_status = button;
 
