@@ -7,7 +7,7 @@ include(${PICO_SDK_PATH}/external/pico_sdk_import.cmake)
 
 project(littlefs-usb C CXX ASM)
 
-# set(PICO_BOARD pico_w)
+set(PICO_BOARD pico_w)
 set(FAMILY rp2040)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
@@ -21,7 +21,7 @@ add_executable(littlefs-usb
   usb_descriptors.c
   mimic_fat.c
 )
-target_link_libraries(littlefs-usb
+target_link_libraries(littlefs-usb PRIVATE
   hardware_flash
   hardware_sync
   littlefs
@@ -29,6 +29,7 @@ target_link_libraries(littlefs-usb
   tinyusb_additions
   tinyusb_board
   tinyusb_device
+  pico_cyw43_arch_none
 )
 
 target_include_directories(littlefs-usb

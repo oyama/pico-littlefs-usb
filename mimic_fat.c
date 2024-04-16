@@ -915,6 +915,35 @@ static bool save_temporary_file(uint32_t request_block, void *buffer) {
     return 1;
 }
 
+static int read_temporary_file(uint32_t request_block, void *buffer) {
+    lfs_t fs;
+
+    printf("read_temporary_file: cluster=%u\n", request_block - 1);
+    int err = lfs_mount(&fs, &lfs_pico_flash_config);
+
+    char filename[LFS_NAME_MAX + 1];
+    sprintf(filename, "/.fat/%04d", request_block - 1);
+    lfs_file_t f;
+    err = lfs_file_open(&fs, &f, filename, LFS_O_RDONLY);
+    if (err != LFS_ERR_OK) {
+        printf("read_temporary_file: can't open '%s': err=%d\n", filename, err);
+        lfs_unmount(&fs);
+        return err;
+    }
+
+    lfs_ssize_t size = lfs_file_read(&fs, &f, buffer, 512);
+    if (size != 512) {
+        printf("read_temporary_file: can't read '%s': size=%u\n", filename, size);
+        lfs_file_close(&fs, &f);
+        lfs_unmount(&fs);
+        return err;
+    }
+
+    lfs_file_close(&fs, &f);
+    lfs_unmount(&fs);
+    return LFS_ERR_OK;
+}
+
 /*
  * Recover FAT directory entries from LFS temporary files
  */
@@ -1190,6 +1219,78 @@ static void restore_directory_from(uint8_t *directory, uint32_t directory_cluste
 }
 
 
+static int littlefs_mkdir(uint8_t *filename) {
+    lfs_t fs;
+
+    printf(ANSI_RED "littlefs_mkdir('%s') ..." ANSI_CLEAR, filename);
+    int err = lfs_mount(&fs, &lfs_pico_flash_config);
+    if (err != LFS_ERR_OK) {
+        printf("ng: err=%d\n", err);
+        return err;
+    }
+    err = lfs_mkdir(&fs, filename);
+    if (err != LFS_ERR_OK && err != LFS_ERR_EXIST) {
+        printf("ng: err=%d\n", err);
+        lfs_unmount(&fs);
+        return err;
+    }
+    lfs_unmount(&fs);
+
+    printf("ok\n");
+
+    return LFS_ERR_OK;
+}
+
+static int littlefs_write(uint8_t *filename, uint32_t cluster, size_t size) {
+    lfs_t fs;
+    uint8_t buffer[512];
+
+    printf(ANSI_RED "littlefs_write('%s', cluster=%u) ..." ANSI_CLEAR, filename, cluster);
+    int err = lfs_mount(&fs, &lfs_pico_flash_config);
+    if (err != LFS_ERR_OK) {
+        printf("ng: lfs_mount err=%d\n", err);
+        return err;
+    }
+
+    lfs_file_t f;
+    lfs_file_open(&fs, &f, filename, LFS_O_RDWR|LFS_O_CREAT);
+    size_t remind = size;
+
+    while (true) {
+        err = read_temporary_file(cluster + 1,  buffer);
+        if (err != LFS_ERR_OK) {
+            printf("ng: read_temporary_file err=%d\n", err);
+            lfs_file_close(&fs, &f);
+            lfs_unmount(&fs);
+            return err;
+        }
+        size_t s = lfs_file_write(&fs, &f, buffer, sizeof(buffer));
+        if (s != 512) {
+            printf("ng: lfs_file_write, %u < %u\n", s, 512);
+            lfs_file_close(&fs, &f);
+            lfs_unmount(&fs);
+            return -1;
+        }
+        int next_cluster = fat_table_value(cluster);
+        if (next_cluster >= 0xFF8) {  // eof
+            break;
+        }
+        cluster = next_cluster;
+    }
+    err = lfs_file_truncate(&fs, &f, size);
+    if (err != LFS_ERR_OK) {
+        printf("ng: truncate err=%d\n", err);
+        lfs_file_close(&fs, &f);
+        lfs_unmount(&fs);
+        return err;
+    }
+    lfs_file_close(&fs, &f);
+
+    lfs_unmount(&fs);
+    printf("ok\n");
+    return 0;
+}
+
 /*
  * Update a file or directory from the difference indicated by *src in dir_cluster_id
  *
@@ -1243,7 +1344,8 @@ static void create_lfs_file_or_directory(fat_dir_entry_t *src, uint32_t dir_clus
             }
 
             restore_directory_from(directory, dir->DIR_FstClusLO);
-            printf(ANSI_RED "  Implement littlefs `mkdir '%s'`\n" ANSI_CLEAR, directory);
+            littlefs_mkdir(directory);
+
             is_long_filename = false;
 
             continue;
@@ -1261,9 +1363,7 @@ static void create_lfs_file_or_directory(fat_dir_entry_t *src, uint32_t dir_clus
 
             printf("call restore_file_from(directory=%u, target=%u)\n", dir_cluster_id, dir->DIR_FstClusLO);
             restore_file_from(filename, dir_cluster_id,  dir->DIR_FstClusLO);
-
-            printf(ANSI_RED "  Implement littlefs `cat cluster=%u > '%s'`\n" ANSI_CLEAR, dir->DIR_FstClusLO, filename);
-
+            littlefs_write(filename, dir->DIR_FstClusLO, dir->DIR_FileSize);
             is_long_filename = false;
             continue;
         } else {
@@ -1382,6 +1482,7 @@ void mimic_fat_write(uint8_t lun, uint32_t request_block, uint32_t offset, void 
         diff_dir_entry(&orig[0], (fat_dir_entry_t *)buffer, dir_append, dir_update);
         printf("create lfs file or directory-------\n");
         save_temporary_file(2, buffer);
+        save_temporary_file(1, buffer); // FIXME
 
         create_lfs_file_or_directory(dir_append, request_block - 1);
 
