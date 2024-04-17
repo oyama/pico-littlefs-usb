@@ -14,6 +14,7 @@ set(CMAKE_CXX_STANDARD 17)
 
 pico_sdk_init()
 
+
 add_executable(littlefs-usb
   main.c
   littlefs_driver.c
@@ -29,9 +30,7 @@ target_link_libraries(littlefs-usb PRIVATE
   tinyusb_additions
   tinyusb_board
   tinyusb_device
-  pico_cyw43_arch_none
 )
-
 target_include_directories(littlefs-usb
   PRIVATE
   lib/littlefs
@@ -51,6 +50,7 @@ target_sources(littlefs INTERFACE
 
 #target_compile_options(littlefs-usb PRIVATE -Werror -Wall -Wextra -Wnull-dereference)
 string(APPEND CMAKE_EXE_LINKER_FLAGS "-Wl,--print-memory-usage")
+
 
 
 pico_enable_stdio_usb(littlefs-usb 1)

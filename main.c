@@ -18,8 +18,6 @@
 #include <lfs.h>
 #include "bootsel_button.h"
 
-#include <pico/cyw43_arch.h>
-
 
 extern const struct lfs_config lfs_pico_flash_config;  // littlefs_driver.c
 
@@ -38,17 +36,18 @@ extern const struct lfs_config lfs_pico_flash_config;  // littlefs_driver.c
 #define ANSI_CLEAR "\e[0m"
 
 
+lfs_t fs;
+
 /*
  * Format the file system if it does not exist
  */
 static void test_filesystem_and_format_if_necessary(bool force_format) {
-    lfs_t fs;
-    if ((lfs_mount(&fs, &lfs_pico_flash_config) != 0) || force_format) {
+   lfs_unmount(&fs);
+   if ((lfs_mount(&fs, &lfs_pico_flash_config) != 0) || force_format) {
         printf("Format the onboard flash memory with littlefs\n");
 
         lfs_unmount(&fs);
         lfs_format(&fs, &lfs_pico_flash_config);
-        return;
         /*
         lfs_mount(&fs, &lfs_pico_flash_config);
         lfs_file_t f;
@@ -57,7 +56,7 @@ static void test_filesystem_and_format_if_necessary(bool force_format) {
         lfs_file_close(&fs, &f);
         */
     }
-    lfs_unmount(&fs);
+    lfs_mount(&fs, &lfs_pico_flash_config);
 }
 
 /*
@@ -72,14 +71,7 @@ static void sensor_logging_task(void) {
 
     if (last_status != button && button) {  // Push BOOTSEL button
         count += 1;
-        lfs_t fs;
         printf("Update %s\n", FILENAME);
-        int err = lfs_mount(&fs, &lfs_pico_flash_config);
-        if (err) {
-            printf("can't mount littlefs: err=%d\n", err);
-            last_status = button;
-            return;
-        }
 
         lfs_file_t f;
         lfs_file_open(&fs, &f, FILENAME, LFS_O_RDWR|LFS_O_APPEND|LFS_O_CREAT);
@@ -88,7 +80,6 @@ static void sensor_logging_task(void) {
         lfs_file_write(&fs, &f, buffer, strlen((char *)buffer));
         printf((char *)buffer);
         lfs_file_close(&fs, &f);
-        lfs_unmount(&fs);
     }
     last_status = button;
 
@@ -97,48 +88,21 @@ static void sensor_logging_task(void) {
     } else {
         long_push = 0;
     }
-    if (long_push > 125000) { // Long-push BOOTSEL button
+    if (long_push > 25000) { // Long-push BOOTSEL button
         test_filesystem_and_format_if_necessary(true);
         count = 0;
         long_push = 0;
     }
 }
 
-static void watch_file_update_from_usb_host(void) {
-    lfs_t fs;
-    int err = lfs_mount(&fs, &lfs_pico_flash_config);
-    if (err) {
-        printf("can't mount littlefs: err=%d\n", err);
-        return;
-    }
-
-    lfs_file_t f;
-    err = lfs_file_open(&fs, &f, "hello_world.txt", LFS_O_RDONLY);
-    if (err == LFS_ERR_OK) {
-        uint8_t buffer[512];
-        size_t s = lfs_file_read(&fs, &f, buffer, sizeof(buffer));
-        if (strcmp(buffer, "Hello littlefs\n") == 0) {
-            cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);
-        } else {
-            cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 0);
-        }
-    }
-
-    lfs_file_close(&fs, &f);
-    lfs_unmount(&fs);
-}
-
 int main(void) {
     board_init();
     tud_init(BOARD_TUD_RHPORT);
     stdio_init_all();
-    cyw43_arch_init();
 
     test_filesystem_and_format_if_necessary(true);
     while (true) {
         sensor_logging_task();
-        watch_file_update_from_usb_host();
         tud_task();
-        cyw43_arch_poll();
     }
 }
