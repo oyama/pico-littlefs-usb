@@ -42,7 +42,7 @@ typedef struct {
 } fat_lfn_t;
 
 enum {
-  DISK_BLOCK_NUM  = 16, // 8KB is the smallest size that windows allow to mount
+  DISK_BLOCK_NUM  = 128,
   DISK_BLOCK_SIZE = 512
 };
 
