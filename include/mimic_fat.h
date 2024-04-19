@@ -47,9 +47,12 @@ enum {
 };
 
 
+void mimic_fat_initialize_cache(void);
 void mimic_fat_boot_sector(void *buffer, uint32_t bufsize);
 void mimic_fat_table(void *buffer, uint32_t bufsize);
+
+void mimic_fat_read_cluster(uint32_t cluster, void *buffer, uint32_t bufsize);
+
 void mimic_fat_root_dir_entry(void *buffer, uint32_t bufsize);
-void mimic_fat_file_entry(uint32_t fat_sector, void *buffer, uint32_t bufsize);
 void mimic_fat_write(uint8_t lun, uint32_t fat_sector, uint32_t offset, void *buffer, uint32_t bufsize);
 #endif

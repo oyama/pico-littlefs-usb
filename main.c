@@ -50,11 +50,18 @@ static void test_filesystem_and_format_if_necessary(bool force_format) {
         lfs_format(&fs, &lfs_pico_flash_config);
 
         lfs_mount(&fs, &lfs_pico_flash_config);
+
         lfs_file_t f;
         lfs_file_open(&fs, &f, "README.TXT", LFS_O_RDWR|LFS_O_CREAT);
         lfs_file_write(&fs, &f, README_TXT, strlen(README_TXT));
         lfs_file_close(&fs, &f);
 
+        lfs_mkdir(&fs, "Settings");
+
+        lfs_file_t f2;
+        lfs_file_open(&fs, &f2, "Settings/wifi.txt", LFS_O_RDWR|LFS_O_CREAT);
+        lfs_file_write(&fs, &f2, "Hello World!\n", strlen("Hello World!\n"));
+        lfs_file_close(&fs, &f2);
     }
     lfs_mount(&fs, &lfs_pico_flash_config);
 }
