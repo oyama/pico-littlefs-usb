@@ -42,8 +42,7 @@ lfs_t fs;
  * Format the file system if it does not exist
  */
 static void test_filesystem_and_format_if_necessary(bool force_format) {
-
-   if ((lfs_mount(&fs, &lfs_pico_flash_config) != 0) || force_format) {
+   if (force_format || (lfs_mount(&fs, &lfs_pico_flash_config) != 0)) {
         printf("Format the onboard flash memory with littlefs\n");
 
         lfs_unmount(&fs);

@@ -21,6 +21,8 @@
 1. `DIR_Name[0] = 0xE5` of the directory entry (no deletion)
 2. Release the assigned cluster from the FAT table
 
+## Rename file
+
 
 ## Sequence for macOS Connection
 
