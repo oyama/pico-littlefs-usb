@@ -863,6 +863,8 @@ static void restore_file_from(uint8_t *result_filename, uint32_t directory_clust
                 }
                 continue;
             }
+            if (dir[i].DIR_Name[0] == 0xE5)
+                continue;
 
             if (dir[i].DIR_Attr & 0x0F == 0x0F) {
                 fat_lfn_t *long_file = (fat_lfn_t *)&dir[i];
@@ -1075,6 +1077,8 @@ static int find_dir_entry_cache(find_dir_entry_cache_result_t *result, uint32_t 
     for (int i = (base_cluster == 1 ? 1 : 2); i < 16; i++) {
         if (strncmp(entry[i].DIR_Name, "..         ", 11) == 0)
             continue;
+        if (entry[i].DIR_Name[0] == 0xE5)
+            continue;
         if (entry[i].DIR_Name[0] == 0)
             break;
 
@@ -1157,6 +1161,10 @@ static void difference_of_dir_entry(fat_dir_entry_t *orig, fat_dir_entry_t *new,
     printf("----------------------------\n");
     print_dir_entry(new);
     printf("----------------------------\n");
+    if (memcmp(orig, new, sizeof(fat_dir_entry_t) * 16) == 0) {
+        return;
+    }
+
     for (int i = 0; i < 16; i++) {
         if (strncmp(new[i].DIR_Name, ".          ", 11) == 0
             || strncmp(new[i].DIR_Name, "..         ", 11) == 0
@@ -1175,6 +1183,7 @@ static void difference_of_dir_entry(fat_dir_entry_t *orig, fat_dir_entry_t *new,
                     && orig[j].DIR_Name[0] != 0xE5
                     && new[i].DIR_FileSize != 0)
                 {
+                    // `delete` or `rename`.
                     memcpy(delete, &orig[j], sizeof(fat_dir_entry_t));
                     delete++;
                     break;
@@ -1261,7 +1270,6 @@ static int littlefs_write(uint8_t *filename, uint32_t cluster, size_t size) {
             lfs_file_close(&real_filesystem, &f);
             return -1;
         }
-        lfs_file_sync(&real_filesystem, &f);
 
         int next_cluster = fat_table_value(cluster);
         if (next_cluster >= 0xFF8) {  // eof
@@ -1379,6 +1387,47 @@ static void update_lfs_file_or_directory(fat_dir_entry_t *src, uint32_t dir_clus
     }
 }
 
+/*
+ * Save the contents of real file system filename in the cluster cache
+ */
+static void save_file_clusters(uint32_t cluster, uint8_t *filename) {
+    printf("save_file_clusters(cluster=%u, '%s')\n", cluster, filename);
+
+    uint8_t buffer[DISK_BLOCK_SIZE];
+    uint32_t next_cluster = cluster;
+    lfs_file_t f;
+
+    int err = lfs_file_open(&real_filesystem, &f, filename, LFS_O_RDONLY);
+    if (err != LFS_ERR_OK) {
+        printf("save_file_clusters: lfs_file_open('%s') error=%d\n", filename, err);
+        return;
+    }
+
+    lfs_soff_t seek_pos;
+    lfs_ssize_t read_bytes;
+    int offset = 0;
+    while (next_cluster < 0xFF8) {
+        next_cluster = fat_table_value(cluster);
+
+        seek_pos = lfs_file_seek(&real_filesystem, &f, offset * DISK_BLOCK_SIZE, LFS_SEEK_SET);
+        if (seek_pos < 0) {
+            printf("save_file_clusters: lfs_file_seek(%u) failed: error=%d\n",
+                offset * DISK_BLOCK_SIZE, seek_pos);
+            break;
+        }
+        memset(buffer, 0, sizeof(buffer));
+        read_bytes = lfs_file_read(&real_filesystem, &f, buffer, sizeof(buffer));
+        if (read_bytes < 0) {
+            printf("save_file_clusters: lfs_file_read() error=%d\n", read_bytes);
+            break;
+        }
+        save_temporary_file(cluster, buffer);
+        offset++;
+    }
+
+    lfs_file_close(&real_filesystem, &f);
+}
+
 static void delete_dir_entry_cache(fat_dir_entry_t *src, uint32_t dir_cluster_id) {
     uint8_t filename[LFS_NAME_MAX + 1];
     uint32_t next_cluster = 0;
@@ -1392,9 +1441,12 @@ static void delete_dir_entry_cache(fat_dir_entry_t *src, uint32_t dir_cluster_id
             restore_directory_from(filename, dir_cluster_id, dir->DIR_FstClusLO);
         } else {
             restore_file_from(filename, dir_cluster_id, dir->DIR_FstClusLO);
+            save_file_clusters(dir->DIR_FstClusLO, filename);
         }
         littlefs_remove(filename);
 
+        // Cluster cache is needed at the rename destination, so do not delete it.
+        /*
         next_cluster = dir->DIR_FstClusLO;
         while (true) {
             delete_temporary_file(next_cluster);
@@ -1403,6 +1455,7 @@ static void delete_dir_entry_cache(fat_dir_entry_t *src, uint32_t dir_cluster_id
                 break;
             }
         }
+        */
         continue;
     }
 }

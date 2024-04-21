@@ -118,3 +118,7 @@ void tud_mount_cb(void) {
   printf("\e[45mmount\n\e[0m");
   mimic_fat_initialize_cache();
 }
+
+void tud_umount_cb(void) {
+  printf("\e[45munmount\n\e[0m");
+}
