@@ -1,7 +1,7 @@
 #include "unicode.h"
 
 
-size_t strlen_utf8(const uint8_t *src) {
+size_t strlen_utf8(const char *src) {
     size_t count = 0;
     size_t i = 0;
     size_t src_size = strlen(src);
@@ -29,7 +29,7 @@ size_t strlen_utf8(const uint8_t *src) {
     return count;
 }
 
-size_t strlen_utf16le(const uint16_t* str, size_t size) {
+size_t strlen_utf16le(const uint16_t *str, size_t size) {
     size_t length = 0;
 
     while (length <size && str[length] != 0) {
@@ -40,7 +40,7 @@ size_t strlen_utf16le(const uint16_t* str, size_t size) {
 }
 
 
-size_t ascii_to_utf16le(uint16_t *dist, size_t dist_size, const uint8_t *src, size_t src_size) {
+size_t ascii_to_utf16le(uint16_t *dist, size_t dist_size, const char *src, size_t src_size) {
     size_t utf16le_pos = 0;
 
     for (size_t i = 0; i < src_size && src[i] != '\0'; ++i) {
@@ -60,7 +60,7 @@ size_t ascii_to_utf16le(uint16_t *dist, size_t dist_size, const uint8_t *src, si
 }
 
 // Convert UTF-8 to UTF-16LE and return the length of the converted string
-size_t utf8_to_utf16le(uint16_t* dist, size_t dist_size, const uint8_t* src, size_t src_size) {
+size_t utf8_to_utf16le(uint16_t* dist, size_t dist_size, const char *src, size_t src_size) {
     size_t dist_pos = 0;
     size_t src_pos = 0;
 
@@ -128,7 +128,7 @@ size_t utf8_to_utf16le(uint16_t* dist, size_t dist_size, const uint8_t* src, siz
     return dist_pos;
 }
 
-size_t utf16le_to_utf8(uint8_t *dist, size_t buffer_size, const uint16_t *src, size_t len) {
+size_t utf16le_to_utf8(char *dist, size_t buffer_size, const uint16_t *src, size_t len) {
     size_t dist_len = 0;
 
     for (size_t i = 0; i < len; ++i) {

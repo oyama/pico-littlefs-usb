@@ -37,20 +37,21 @@ target_include_directories(littlefs-usb
   lib/littlefs
   ${CMAKE_CURRENT_LIST_DIR}/include
 )
+target_compile_options(littlefs-usb PRIVATE -Werror -Wall -Wextra -Wnull-dereference)
+target_link_options(littlefs-usb PRIVATE -Wl,--print-memory-usage)
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DPICO_USE_MALLOC_MUTEX=1")
+
 add_library(littlefs INTERFACE)
+target_sources(littlefs INTERFACE
+  lib/littlefs/lfs.c
+  lib/littlefs/lfs_util.c
+)
 target_include_directories(littlefs INTERFACE
   lib/littlefs
 )
+target_compile_options(littlefs INTERFACE -Wno-unused-function -Wno-null-dereference)
 target_link_libraries(littlefs INTERFACE hardware_flash)
-target_sources(littlefs INTERFACE
-   lib/littlefs/lfs.c
-   lib/littlefs/lfs_util.c
-)
 
-#target_compile_options(littlefs-usb PRIVATE -Werror -Wall -Wextra -Wnull-dereference)
-string(APPEND CMAKE_EXE_LINKER_FLAGS "-Wl,--print-memory-usage")
 
 pico_enable_stdio_usb(littlefs-usb 1)
 pico_add_extra_outputs(littlefs-usb)

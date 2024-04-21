@@ -42,10 +42,8 @@ typedef struct {
     uint8_t LDIR_Name3[4];
 } fat_lfn_t;
 
-enum {
-  DISK_BLOCK_NUM  = 128,
-  DISK_BLOCK_SIZE = 512
-};
+#define DISK_BLOCK_NUM    128
+#define DISK_BLOCK_SIZE   512
 
 
 void mimic_fat_initialize_cache(void);
