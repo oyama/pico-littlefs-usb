@@ -704,7 +704,7 @@ static int create_dir_entry_cache(unsigned char *path, uint32_t parent_cluster, 
     }
     lfs_dir_close(&real_filesystem, &dir);
     save_temporary_file(current_cluster, dir_entry);
-    print_dir_entry(dir_entry);
+    //print_dir_entry(dir_entry);
     return 0;
 }
 
@@ -817,9 +817,9 @@ static void restore_file_from(uint8_t *result_filename, uint32_t directory_clust
             break;
         }
 
-        printf("restore_file_from---\n");
-        print_dir_entry(&dir);
-        printf("--------------------\n");
+        //printf("restore_file_from---\n");
+        //print_dir_entry(&dir);
+        //printf("--------------------\n");
         uint8_t child_filename[LFS_NAME_MAX + 1];
         uint8_t filename[LFS_NAME_MAX + 1];
         uint16_t long_filename[LFS_NAME_MAX + 1];
