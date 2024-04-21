@@ -1107,6 +1107,17 @@ static int find_dir_entry_cache(find_dir_entry_cache_result_t *result, uint32_t 
     return 0;
 }
 
+
+static void create_blank_dir_entry_cache(uint32_t cluster, uint32_t parent_dir_cluster) {
+    fat_dir_entry_t entry[16];
+
+    memset(entry, 0, sizeof(entry));
+    set_directory_entry(&entry[0], ".", cluster);
+    set_directory_entry(&entry[1], "..", parent_dir_cluster == 1 ? 0 : parent_dir_cluster);
+
+    save_temporary_file(cluster, entry);
+}
+
 /*
  */
 void mimic_fat_read_cluster(uint32_t cluster, void *buffer, uint32_t bufsize) {
@@ -1202,11 +1213,22 @@ static void difference_of_dir_entry(fat_dir_entry_t *orig, fat_dir_entry_t *new,
             {
                 continue;
             }
+
             if (strncmp(new[i].DIR_Name, orig[j].DIR_Name, 11) == 0 &&
                 new[i].DIR_FstClusLO == orig[j].DIR_FstClusLO &&
                 new[i].DIR_FileSize == orig[j].DIR_FileSize)
             {
                 is_found = true;
+                break;
+            }
+
+            // rename
+            if (i == j &&
+                new[i].DIR_FstClusLO == orig[j].DIR_FstClusLO &&
+                new[i].DIR_FileSize == orig[j].DIR_FileSize)
+            {
+                memcpy(delete, &orig[j], sizeof(fat_dir_entry_t));
+                delete++;
                 break;
             }
         }
@@ -1360,6 +1382,7 @@ static void update_lfs_file_or_directory(fat_dir_entry_t *src, uint32_t dir_clus
             }
             restore_directory_from(directory, dir_cluster_id, dir->DIR_FstClusLO);
             littlefs_mkdir(directory);
+            create_blank_dir_entry_cache(dir->DIR_FstClusLO, dir_cluster_id);
 
             is_long_filename = false;
 
@@ -1513,6 +1536,8 @@ static void update_file_entry(uint32_t request_block, void *buffer, uint32_t buf
 
 
 void mimic_fat_write(uint8_t lun, uint32_t request_block, uint32_t offset, void *buffer, uint32_t bufsize) {
+    find_dir_entry_cache_result_t result;
+
     printf("\e[35mWrite block=%u offset=%u\e[0m\n", request_block, offset);
 
     if (request_block == 0) { // master boot record
@@ -1545,10 +1570,18 @@ void mimic_fat_write(uint8_t lun, uint32_t request_block, uint32_t offset, void 
         if (base_cluster == 0) {
             printf("mimic_fat_write: not allocated cluster\n");
             save_temporary_file(request_block - 1, buffer);
+
+           // For hosts that write to unallocated space first
+           int err = find_dir_entry_cache(&result, 1, request_block - 1);
+            if (err < 0) {
+                return;
+            }
+            if (result.is_found && !result.is_directory) {
+                littlefs_write(result.path, request_block - 1, result.size);
+            }
             return;
         }
 
-        find_dir_entry_cache_result_t result;
         int err = find_dir_entry_cache(&result, 1, base_cluster);
         if (err < 0) {
             printf("mimic_fat_write: find_dir_entry_cache(1, base_cluster=%u) error=%d\n",

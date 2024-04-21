@@ -34,6 +34,10 @@ Name change in the same directory. clusters do not change.
 
 1. Add a new file entry to the old file entry and set the delete flag (0xE5) to the old file entry.
 
+or, In Windows 11 do the following
+
+1. Update new name for the target directory entry
+
 ### Move
 
 Moving to a different directory. clusters do not change.
