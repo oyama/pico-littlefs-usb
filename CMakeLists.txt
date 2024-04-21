@@ -21,6 +21,7 @@ add_executable(littlefs-usb
   usb_msc_driver.c
   usb_descriptors.c
   mimic_fat.c
+  unicode.c
 )
 target_link_libraries(littlefs-usb PRIVATE
   hardware_flash
