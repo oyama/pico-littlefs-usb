@@ -49,6 +49,20 @@ FAT12 is a very simple file system and can be easily mimicked. Depending on the 
 
 Upon USB connection, all files in the littlefs file system are searched to build a cache of FAT directory entries. Read requests from the USB host determine the type (file or directory) of the requested object based on the cache. Requests for directories are sent directly from the cache, while requests for files open the corresponding file in littlefs and send its content. Write requests involve updating the cache and reflecting changes in littlefs. The cache is updated based on the differences in directory entries.
 
+## Testing
+
+The tests directory contains code to verify the API's behavior. After building and installing the test code on the Pico, the unit tests are executed directly on the device, and results are sent via UART.
+
+```bash
+make tests
+```
+
+To run the tests, transfer the `tests/tests.uf2` file to your Pico. For a more comprehensive debugging experience, connect the [Raspberry Pi Debug Probe](https://www.raspberrypi.com/documentation/microcontrollers/debug-probe.html) to the SWD Debug and UART Serial interfaces of the Pico. Use the following command to install and run the tests:
+
+```bash
+make run_tests
+```
+
 ## References
 
 - [littlefs](https://github.com/littlefs-project/littlefs)

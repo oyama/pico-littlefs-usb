@@ -850,7 +850,7 @@ static void restore_file_from(uint8_t *result_filename, uint32_t directory_clust
             if (dir[i].DIR_Name[0] == 0xE5)
                 continue;
 
-            if (dir[i].DIR_Attr & 0x0F == 0x0F) {
+            if ((dir[i].DIR_Attr & 0x0F) == 0x0F) {
                 fat_lfn_t *long_file = (fat_lfn_t *)&dir[i];
                 if (long_file->LDIR_Ord & 0x40) {
                     memset(long_filename, 0xFF, sizeof(long_filename));
@@ -1006,7 +1006,7 @@ static void restore_directory_from(uint8_t *directory, uint32_t base_directory_c
             if (dir[i].DIR_Name[0] == 0xE5)
                 continue;
 
-            if (dir[i].DIR_Attr & 0x0F == 0x0F) {
+            if ((dir[i].DIR_Attr & 0x0F) == 0x0F) {
                 fat_lfn_t *long_file = (fat_lfn_t *)&dir[i];
                 if (long_file->LDIR_Ord & 0x40) {
                     memset(long_filename, 0xFF, sizeof(long_filename));
