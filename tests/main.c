@@ -11,6 +11,7 @@ int main(void) {
     printf("Start all tests\n");
 
     test_read();
+    test_write();
 
     printf("All tests are ok\n");
 }

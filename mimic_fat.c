@@ -609,7 +609,7 @@ static int create_dir_entry_cache(const char *path, uint32_t parent_cluster, uin
     fat_dir_entry_t *entry, dir_entry[DISK_BLOCK_SIZE / sizeof(fat_dir_entry_t)];
     lfs_dir_t dir;
     struct lfs_info finfo;
-    unsigned char directory_path[LFS_NAME_MAX + 1];
+    char directory_path[LFS_NAME_MAX * 2 + 1 + 1];  // for sprintf "%s/%s"
     memset(dir_entry, 0, sizeof(dir_entry));
     entry = dir_entry;
 
@@ -659,9 +659,10 @@ static int create_dir_entry_cache(const char *path, uint32_t parent_cluster, uin
             update_fat_table(*allocated_cluster, 0xFFF);
             entry = append_dir_entry_directory(entry, &finfo, *allocated_cluster);
             if (parent_cluster == 0)
-                strncpy((char *)directory_path, finfo.name, sizeof(directory_path));
+                strncpy(directory_path, finfo.name, sizeof(directory_path));
             else
-                snprintf((char *)directory_path, sizeof(directory_path), "%s/%s", path, finfo.name);
+                snprintf(directory_path, sizeof(directory_path), "%s/%s", path, finfo.name);
+            directory_path[LFS_NAME_MAX] = '\0';
 
             err = create_dir_entry_cache((const char *)directory_path, current_cluster, allocated_cluster);
             if (err < 0) {
@@ -781,7 +782,7 @@ static void restore_file_from(char *result_filename, uint32_t directory_cluster_
     int target = file_cluster_id;
 
     fat_dir_entry_t dir[16];
-    uint8_t result[LFS_NAME_MAX + 1];
+    uint8_t result[LFS_NAME_MAX * 2 + 1 + 1]; // for sprintf "%s/%s"
     memset(result, 0, sizeof(result));
     if (directory_cluster_id == 0 && file_cluster_id == 0) {
         printf("  this is initial cluster\n");
@@ -855,6 +856,7 @@ static void restore_file_from(char *result_filename, uint32_t directory_cluster_
                 if (dir[i].DIR_FstClusLO == target) {
                     strcpy((char *)child_filename, (const char *)result);
                     snprintf((char *)result, sizeof(result), "%s/%s", filename, child_filename);
+                    result[LFS_NAME_MAX] = '\0';
                     break;
                 }
 
@@ -883,7 +885,8 @@ static void restore_file_from(char *result_filename, uint32_t directory_cluster_
         target = self;
     }
 
-    strncpy((char *)result_filename, (const char *)result, LFS_NAME_MAX + 1);
+    strncpy((char *)result_filename, (const char *)result, LFS_NAME_MAX);
+    result_filename[LFS_NAME_MAX] = '\0';
 }
 
 /*
@@ -953,7 +956,7 @@ static void restore_directory_from(char *directory, uint32_t base_directory_clus
     int target = directory_cluster_id;
 
     fat_dir_entry_t dir[16];
-    uint8_t result[LFS_NAME_MAX + 1];
+    uint8_t result[LFS_NAME_MAX * 2 + 1 + 1];  // for sprintf "%s/%s"
     memset(result, 0, sizeof(result));
 
     while (cluster_id >= 0) {
@@ -1010,11 +1013,12 @@ static void restore_directory_from(char *directory, uint32_t base_directory_clus
 
                 if (dir[i].DIR_FstClusLO == target) {
                     strcpy((char *)child_filename, (const char *)result);
-                    if (strlen((const char *)child_filename) == 0) {
+                    if (strlen((const char *)child_filename) == 0)
                         strncpy((char *)result, (const char *)filename, sizeof(result));
-                    } else {
+                    else
                         snprintf((char *)result, sizeof(result), "%s/%s", filename, child_filename);
-                    }
+                    result[LFS_NAME_MAX] = '\0';
+
                     target = cluster_id;
                     break;
                 }
@@ -1029,7 +1033,8 @@ static void restore_directory_from(char *directory, uint32_t base_directory_clus
         cluster_id = parent;
     }
 
-    strncpy((char *)directory, (const char *)result, LFS_NAME_MAX + 1);
+    strncpy((char *)directory, (const char *)result, LFS_NAME_MAX);
+    directory[LFS_NAME_MAX] = '\0';
 }
 
 
@@ -1056,7 +1061,6 @@ static int find_dir_entry_cache(find_dir_entry_cache_result_t *result, uint32_t 
             result->directory_cluster = base_cluster;
             result->is_directory = (entry[i].DIR_Attr & 0x10) ? true : false;
             result->size = entry[i].DIR_FileSize;
-
             if (result->is_directory)
                 restore_directory_from(result->path, base_cluster, target_cluster);
             else
@@ -1134,12 +1138,13 @@ static void difference_of_dir_entry(fat_dir_entry_t *orig, fat_dir_entry_t *new,
                                     fat_dir_entry_t *delete)
 {
     bool is_found = false;
-
+#ifndef NDEBUG
     printf("difference_of_dir_entry-----\n");
     print_dir_entry(orig);
     printf("----------------------------\n");
     print_dir_entry(new);
     printf("----------------------------\n");
+#endif
     if (memcmp(orig, new, sizeof(fat_dir_entry_t) * 16) == 0) {
         return;
     }
@@ -1229,7 +1234,7 @@ static int littlefs_mkdir(const char *filename) {
 }
 
 static int littlefs_write(const char *filename, uint32_t cluster, size_t size) {
-    printf(ANSI_RED "littlefs_write('%s', cluster=%lu) ..." ANSI_CLEAR, filename, cluster);
+    printf(ANSI_RED "littlefs_write('%s', cluster=%lu, size=%u) ..." ANSI_CLEAR, filename, cluster, size);
 
     uint8_t buffer[512];
 
@@ -1246,20 +1251,18 @@ static int littlefs_write(const char *filename, uint32_t cluster, size_t size) {
     }
 
     while (true) {
-        err = read_temporary_file(cluster,  buffer);
+        err = read_temporary_file(cluster, buffer);
         if (err != LFS_ERR_OK) {
             printf("ng: read_temporary_file error=%d\n", err);
             lfs_file_close(&real_filesystem, &f);
             return err;
         }
-
         size_t s = lfs_file_write(&real_filesystem, &f, buffer, sizeof(buffer));
         if (s != 512) {
             printf("ng: lfs_file_write, %u < %u\n", s, 512);
             lfs_file_close(&real_filesystem, &f);
             return -1;
         }
-
         int next_cluster = fat_table_value(cluster);
         if (next_cluster == 0x00) // not allocated
             break;
@@ -1274,7 +1277,6 @@ static int littlefs_write(const char *filename, uint32_t cluster, size_t size) {
         return err;
     }
     lfs_file_close(&real_filesystem, &f);
-
     printf("ok\n");
     return 0;
 }
@@ -1542,14 +1544,15 @@ void mimic_fat_write(uint8_t lun, uint32_t request_block, uint32_t offset, void 
         size_t offset = 0;
         uint32_t base_cluster = find_base_cluster_and_offset(request_block - 1, &offset);
         if (base_cluster == 0) {
-            printf("mimic_fat_write: not allocated cluster\n");
+            //printf("mimic_fat_write: not allocated cluster\n");
             save_temporary_file(request_block - 1, buffer);
 
            // For hosts that write to unallocated space first
            int err = find_dir_entry_cache(&result, 1, request_block - 1);
-            if (err < 0) {
+            if (err < 0)  // error
                 return;
-            }
+            if (err == 0)  // not found
+                return;
             if (result.is_found && !result.is_directory) {
                 littlefs_write(result.path, request_block - 1, result.size);
             }

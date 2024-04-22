@@ -6,14 +6,12 @@ endif()
 include(${PICO_SDK_PATH}/external/pico_sdk_import.cmake)
 
 project(littlefs-usb C CXX ASM)
-
 set(PICO_BOARD pico_w)
 set(FAMILY rp2040)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 
 pico_sdk_init()
-
 
 add_executable(littlefs-usb
   main.c
@@ -40,7 +38,6 @@ target_include_directories(littlefs-usb
 target_compile_options(littlefs-usb PRIVATE -Werror -Wall -Wextra -Wnull-dereference)
 target_link_options(littlefs-usb PRIVATE -Wl,--print-memory-usage)
 
-
 add_library(littlefs INTERFACE)
 target_sources(littlefs INTERFACE
   lib/littlefs/lfs.c
@@ -51,7 +48,6 @@ target_include_directories(littlefs INTERFACE
 )
 target_compile_options(littlefs INTERFACE -Wno-unused-function -Wno-null-dereference)
 target_link_libraries(littlefs INTERFACE hardware_flash)
-
 
 pico_enable_stdio_usb(littlefs-usb 1)
 pico_add_extra_outputs(littlefs-usb)

@@ -107,5 +107,6 @@ void test_read(void) {
     test_read_file();
     test_sub_directory();
     test_long_filename();
+
     printf("ok\n");
 }

@@ -9,6 +9,7 @@ add_executable(tests
   main.c
   util.c
   test_read.c
+  test_write.c
 )
 
 target_link_libraries(tests
