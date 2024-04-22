@@ -19,8 +19,8 @@
 
 extern const struct lfs_config lfs_pico_flash_config;  // littlefs_driver.c
 
-static const int FAT_SHORT_NAME_MAX = 11;
-static const int FAT_LONG_FILENAME_CHUNK_MAX = 13;
+static const size_t FAT_SHORT_NAME_MAX = 11;
+static const size_t FAT_LONG_FILENAME_CHUNK_MAX = 13;
 
 static uint8_t fat_disk_image[1][DISK_BLOCK_SIZE] = {
   //------------- Block0: Boot Sector -------------//
@@ -279,7 +279,7 @@ static bool is_short_filename_dir(uint8_t *filename) {
     if (strlen((const char *)filename) > FAT_SHORT_NAME_MAX) {
         return false;
     }
-    for (int i = 0; i < FAT_SHORT_NAME_MAX; i++) {
+    for (size_t i = 0; i < FAT_SHORT_NAME_MAX; i++) {
         if (filename[i] == '\0') {
             break;
         }
@@ -1544,7 +1544,7 @@ void mimic_fat_write(uint8_t lun, uint32_t request_block, uint32_t offset, void 
         size_t offset = 0;
         uint32_t base_cluster = find_base_cluster_and_offset(request_block - 1, &offset);
         if (base_cluster == 0) {
-            //printf_debug("mimic_fat_write: not allocated cluster\n");
+            printf_debug("mimic_fat_write: not allocated cluster\n");
             save_temporary_file(request_block - 1, buffer);
 
            // For hosts that write to unallocated space first
@@ -1565,6 +1565,12 @@ void mimic_fat_write(uint8_t lun, uint32_t request_block, uint32_t offset, void 
                    base_cluster, err);
             return;
         }
+        if (err == 0) {
+            printf_debug(ANSI_RED "find_dir_entry_cache not found cluster=%lu\n" ANSI_CLEAR, base_cluster);
+            save_temporary_file(request_block - 1, buffer);
+            return;
+        }
+
         if (result.is_directory)
             update_dir_entry(request_block - 1, buffer);
         else
