@@ -1185,6 +1185,18 @@ static void difference_of_dir_entry(fat_dir_entry_t *orig, fat_dir_entry_t *new,
                     delete++;
                     break;
                 }
+
+                if (orig[j].DIR_Attr & 0x10  // directory
+                    && new[i].DIR_FstClusLO == orig[j].DIR_FstClusLO
+                    && new[i].DIR_FileSize == 0
+                    && orig[j].DIR_Name[0] != 0xE5
+                    && i == j)
+                {
+                    // `delete` or `rename`.
+                    memcpy(delete, &orig[j], sizeof(fat_dir_entry_t));
+                    delete++;
+                    break;
+                }
             }
             continue;
         }
@@ -1539,6 +1551,7 @@ void mimic_fat_write(uint8_t lun, uint32_t request_block, uint32_t offset, void 
         memset(dir_delete , 0, sizeof(dir_delete));
         read_temporary_file(1, orig);
 
+        print_dir_entry(buffer);
         difference_of_dir_entry(&orig[0], (fat_dir_entry_t *)buffer, dir_update, dir_delete);
         delete_dir_entry_cache(dir_delete, request_block - 1);
 
