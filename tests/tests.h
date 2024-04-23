@@ -16,8 +16,9 @@
 
 extern const uint32_t FLASH_BASE;
 
+void test_create(void);
 void test_read(void);
-void test_write(void);
+
 
 void print_block(uint8_t *buffer, size_t l);
 void print_dir_entry(void *buffer);

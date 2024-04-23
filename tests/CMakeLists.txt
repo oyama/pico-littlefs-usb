@@ -8,8 +8,8 @@ add_executable(tests
   ../usb_descriptors.c
   main.c
   util.c
+  test_create.c
   test_read.c
-  test_write.c
 )
 
 target_link_libraries(tests

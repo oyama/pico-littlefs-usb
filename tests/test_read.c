@@ -18,24 +18,29 @@ static void cleanup(void) {
     lfs_unmount(&fs);
 }
 
-
 static void test_read_file(void) {
     uint8_t buffer[512];
 
     setup();
 
-    create_file(&fs, "TEST.TXT", "Hello World!\n");
+    create_file(&fs, "READ.TXT", "Hello World!\n");
+    lfs_unmount(&fs);
+
     mimic_fat_initialize_cache();
 
     tud_msc_read10_cb(0, 0, 0, buffer, sizeof(buffer));  // Boot sector
     tud_msc_read10_cb(0, 1, 0, buffer, sizeof(buffer));  // Allocation table
     uint8_t expected_allocation_table[512] = {0xf8, 0xff, 0xff, 0xff, 0x0f, 0x00};
+    print_block(buffer, 10);
+    printf("\n");
+    print_block(expected_allocation_table, 10);
+
     assert(memcmp(buffer, expected_allocation_table, 6) == 0);
 
     tud_msc_read10_cb(0, 2, 0, buffer, sizeof(buffer));  // Root directory entry
     fat_dir_entry_t root[16] = {
         {.DIR_Name = "littlefsUSB", .DIR_Attr = 0x08, .DIR_FstClusLO = 0, .DIR_FileSize = 0},
-        {.DIR_Name = "TEST    TXT", .DIR_Attr = 0x20, .DIR_FstClusLO = 2, .DIR_FileSize = strlen("Hello World!\n")},
+        {.DIR_Name = "READ    TXT", .DIR_Attr = 0x20, .DIR_FstClusLO = 2, .DIR_FileSize = strlen("Hello World!\n")},
     };
     assert(dirent_cmp((fat_dir_entry_t *)buffer, root) == 0);
 

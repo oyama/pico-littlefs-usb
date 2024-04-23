@@ -55,7 +55,7 @@ static void test_create_file(void) {
 
     fat_dir_entry_t root[16] = {
         {.DIR_Name = "littlefsUSB", .DIR_Attr = 0x08, .DIR_FstClusLO = 0, .DIR_FileSize = 0},
-        {.DIR_Name = "TEST    TXT", .DIR_Attr = 0x20, .DIR_FstClusLO = cluster, .DIR_FileSize = strlen(message)},
+        {.DIR_Name = "CREATE  TXT", .DIR_Attr = 0x20, .DIR_FstClusLO = cluster, .DIR_FileSize = strlen(message)},
     };
     tud_msc_write10_cb(0, 2, 0, root, sizeof(root));  // update directory entry
 
@@ -63,7 +63,53 @@ static void test_create_file(void) {
 
     // Test reflection on the littlefs layer
     lfs_file_t f;
-    int err = lfs_file_open(&fs, &f, "TEST.TXT", LFS_O_RDONLY);
+    int err = lfs_file_open(&fs, &f, "CREATE.TXT", LFS_O_RDONLY);
+    assert(err == LFS_ERR_OK);
+    lfs_ssize_t size = lfs_file_read(&fs, &f, buffer, sizeof(buffer));
+    assert(size == strlen(message));
+    assert(strcmp(buffer, message) == 0);
+    lfs_file_close(&fs, &f);
+
+    cleanup();
+}
+
+static void test_create_file_windows11(void) {
+    uint8_t buffer[512];
+    const uint8_t message[] = "Hello World\n";
+
+    setup();
+    mimic_fat_initialize_cache();
+
+    // update dir entry. The cluster to which the file belongs is set to 0.
+    fat_dir_entry_t root0[16] = {
+        {.DIR_Name = "littlefsUSB", .DIR_Attr = 0x08, .DIR_FstClusLO = 0, .DIR_FileSize = 0},
+        {.DIR_Name = "CREATE  TXT", .DIR_Attr = 0x20, .DIR_FstClusLO = 0, .DIR_FileSize = 0},
+    };
+    tud_msc_write10_cb(0, 2, 0, root0, sizeof(root0));
+
+    // update dir entry. The cluster to be assigned is specified. Not yet allocated.
+    uint16_t cluster = 2;
+    fat_dir_entry_t root1[16] = {
+        {.DIR_Name = "littlefsUSB", .DIR_Attr = 0x08, .DIR_FstClusLO = 0, .DIR_FileSize = 0},
+        {.DIR_Name = "CREATE  TXT", .DIR_Attr = 0x20, .DIR_FstClusLO = cluster, .DIR_FileSize = strlen(message)},
+    };
+    tud_msc_write10_cb(0, 2, 0, root1, sizeof(root1));
+
+    // write the file block to the cluster specified in step 2.
+    memset(buffer, 0, sizeof(buffer));
+    strncpy(buffer, message, sizeof(buffer));
+    tud_msc_write10_cb(0, cluster + 1, 0, buffer, sizeof(buffer));
+
+    // update File allocation table
+    uint8_t fat_table[512] = {0xF8, 0xFF, 0xFF, 0x00, 0x00};
+    update_fat_table(fat_table, cluster, 0xFFF);
+    tud_msc_write10_cb(0, 1, 0, fat_table, sizeof(fat_table));
+
+    reload();
+
+    // Test reflection on the littlefs layer
+    lfs_file_t f;
+    int err = lfs_file_open(&fs, &f, "CREATE.TXT", LFS_O_RDONLY);
     assert(err == LFS_ERR_OK);
     lfs_ssize_t size = lfs_file_read(&fs, &f, buffer, sizeof(buffer));
     assert(size == strlen(message));
@@ -97,7 +143,7 @@ static void test_create_accross_blocksize(void) {
 
     fat_dir_entry_t root[16] = {
         {.DIR_Name = "littlefsUSB", .DIR_Attr = 0x08, .DIR_FstClusLO = 0, .DIR_FileSize = 0},
-        {.DIR_Name = "TEST    TXT", .DIR_Attr = 0x20, .DIR_FstClusLO = cluster, .DIR_FileSize = strlen(message)},
+        {.DIR_Name = "CREATE  TXT", .DIR_Attr = 0x20, .DIR_FstClusLO = cluster, .DIR_FileSize = strlen(message)},
     };
     tud_msc_write10_cb(0, 2, 0, root, sizeof(root));  // update directory entry
 
@@ -105,7 +151,7 @@ static void test_create_accross_blocksize(void) {
 
     // Test reflection on the littlefs layer
     lfs_file_t f;
-    int err = lfs_file_open(&fs, &f, "TEST.TXT", LFS_O_RDONLY);
+    int err = lfs_file_open(&fs, &f, "CREATE.TXT", LFS_O_RDONLY);
     assert(err == LFS_ERR_OK);
     lfs_ssize_t size = lfs_file_read(&fs, &f, read_buffer, sizeof(read_buffer));
     assert(size == strlen(message));
@@ -115,13 +161,12 @@ static void test_create_accross_blocksize(void) {
     cleanup();
 }
 
-
-void test_write(void) {
-    printf("write ..................");
+void test_create(void) {
+    printf("create .................");
 
     test_create_file();
+    test_create_file_windows11();
     test_create_accross_blocksize();
-    //test_update_file();
 
     printf("ok\n");
 }

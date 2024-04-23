@@ -10,8 +10,8 @@ int main(void) {
 
     printf("Start all tests\n");
 
+    test_create();
     test_read();
-    test_write();
 
     printf("All tests are ok\n");
 }

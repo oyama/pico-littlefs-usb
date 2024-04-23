@@ -1,46 +1,59 @@
 # Overview of FAT file system update operations
 
-## Basic Operation
+The FAT file system is operated by operations such as updating directory entries, updating the file allocation table and sending data to the cluster. Note that the procedure for these operations differs slightly between operating systems.
 
-### Create file
+## Create
 
-1. Get a cluster that is not assigned to the FAT table
-2. Write file block to cluster
-3. Update the consumed cluster in the FAT table
-4. Add a directory entry for the file (with new cluster id)
+For macos
 
-### Update file
+1. write file blocks to unassigned clusters
+2. update File allocation table
+3. update dir entry. The clusters written in step 1 are specified
 
-1. Get a cluster that is not assigned to the FAT table
-2. Write a file block to the cluster
-3. Release assigned cluster in the FAT table, and update the consumed cluster
-4. Update the directory entry for the file (with cluster id)
+For Windows 11
 
-or, In Windows 11 do the following
+1. update dir entry. The cluster to which the file belongs is set to 0.
+2. update dir entry. The cluster to be assigned is specified. Not yet allocated.
+3. write the file block to the cluster specified in step 2.
+4. update File allocation table
 
-1. Get a cluster that is not assigned to the FAT table
-2. Release assigned cluster in the FAT table, and update the consumed cluster
-3. Update the directory entry for the file (with cluster id)
-4. Write a file block to the cluster
+## Update
 
-### delete file
+For macos
 
-1. `DIR_Name[0] = 0xE5` of the directory entry (no deletion)
-2. Release the assigned cluster from the FAT table
+1. write file blocks to unassigned clusters
+2. update File allocation table
+3. update dir entry. The cluster to which the file belongs is set to 0.
+4. update dir entry. The clusters written in step 1 are specified.
 
-### Rename
+For Windows 11
 
-Name change in the same directory. clusters do not change.
+1. update dir entry. The cluster to which the file belongs is set to 0.
+2. update File allocation table
+3. update dir entry. A new cluster is specified.
+4. write the file block to the cluster specified in step 3
+5. update File allocation table.
 
-1. Add a new file entry to the old file entry and set the delete flag (0xE5) to the old file entry.
+## Rename
 
-or, In Windows 11 do the following
+For macos
 
-1. Update new name for the target directory entry
+1. update dir entry. The old filename is flagged for deletion and a new file entry is added at the same time. Clusters have the same.
 
-### Move
+For Windows 11
 
-Moving to a different directory. clusters do not change.
+1. The file name of the directory entry is changed.
 
-1. set delete flag (0xE5) to the old file entry
-2. add new file to directory entry.
+## Move
+
+1. update the origin dir entry. Attach deletion flag to filename.
+2. add files to the destination directory entry. Clusters have the same.
+
+## Delete
+
+1. update dir entry. Assign a delete flag to the filename
+2. update File allocation table.
+
+## About Directory Entries
+
+About directory entries Directory entries are data structures that hold information on files and directories held in the file system. Each directory is assigned a unique cluster number. A directory entry holds the names and cluster numbers of the files and directories belonging to the directory.The FAT file system can scan all directories starting from the root directory. Directory entries other than the root hold the cluster number of the parent directory. Note that only references to the root directory are specified with cluster number 0.

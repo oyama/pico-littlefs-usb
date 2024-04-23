@@ -711,6 +711,9 @@ void mimic_fat_initialize_cache(void) {
         printf("mimic_fat_initialize_cache: lfs_mount error=%d\n", err);
         return;
     }
+    memset(fat_table, 0, sizeof(fat_table));
+    update_fat_table(0, 0x0FF8);
+    update_fat_table(1, 0x0FFF);
 
     mimic_fat_cleanup_cache();
 
