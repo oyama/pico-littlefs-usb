@@ -10,7 +10,9 @@
 #include <lfs.h>
 
 
-#define FS_SIZE (64 * 1024)
+//#define FS_SIZE (1024 * 1024)
+#define FS_SIZE (1024 * 1024)
+
 static const uint32_t fs_base = PICO_FLASH_SIZE_BYTES - FS_SIZE;
 
 

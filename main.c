@@ -18,8 +18,8 @@
 #include <lfs.h>
 #include "bootsel_button.h"
 
+
 extern const struct lfs_config lfs_pico_flash_config;  // littlefs_driver.c
-extern bool usb_device_enable;                         // usb_msc_driver.c
 
 #define FILENAME  "SENSOR.TXT"
 
@@ -32,24 +32,28 @@ extern bool usb_device_enable;                         // usb_msc_driver.c
 "read `SENSOR.TXT`.\n" \
 "Hold the button down for 10 seconds to format Pico's flash memory.\n"
 
+#define ANSI_RED "\e[31m"
+#define ANSI_CLEAR "\e[0m"
+
+
+lfs_t fs;
 
 /*
  * Format the file system if it does not exist
  */
 static void test_filesystem_and_format_if_necessary(bool force_format) {
-    lfs_t fs;
-    if ((lfs_mount(&fs, &lfs_pico_flash_config) != 0) || force_format) {
+   if (force_format || (lfs_mount(&fs, &lfs_pico_flash_config) != 0)) {
         printf("Format the onboard flash memory with littlefs\n");
 
+        lfs_unmount(&fs);
         lfs_format(&fs, &lfs_pico_flash_config);
-
         lfs_mount(&fs, &lfs_pico_flash_config);
+
         lfs_file_t f;
         lfs_file_open(&fs, &f, "README.TXT", LFS_O_RDWR|LFS_O_CREAT);
         lfs_file_write(&fs, &f, README_TXT, strlen(README_TXT));
         lfs_file_close(&fs, &f);
     }
-    lfs_unmount(&fs);
 }
 
 /*
@@ -64,25 +68,15 @@ static void sensor_logging_task(void) {
 
     if (last_status != button && button) {  // Push BOOTSEL button
         count += 1;
-        lfs_t fs;
         printf("Update %s\n", FILENAME);
-        int err = lfs_mount(&fs, &lfs_pico_flash_config);
-        if (err) {
-            printf("can't mount littlefs: err=%d\n", err);
-            last_status = button;
-            return;
-        }
 
         lfs_file_t f;
         lfs_file_open(&fs, &f, FILENAME, LFS_O_RDWR|LFS_O_APPEND|LFS_O_CREAT);
         uint8_t buffer[512];
-        snprintf(buffer, sizeof(buffer), "click=%d\n", count);
-        lfs_file_write(&fs, &f, buffer, strlen(buffer));
-        printf(buffer);
+        snprintf((char *)buffer, sizeof(buffer), "click=%d\n", count);
+        lfs_file_write(&fs, &f, buffer, strlen((char *)buffer));
+        printf((char *)buffer);
         lfs_file_close(&fs, &f);
-        lfs_unmount(&fs);
-
-        usb_device_enable = true;  // Enable USB device
     }
     last_status = button;
 
@@ -91,7 +85,7 @@ static void sensor_logging_task(void) {
     } else {
         long_push = 0;
     }
-    if (long_push > 125000) { // Long-push BOOTSEL button
+    if (long_push > 35000) { // Long-push BOOTSEL button
         test_filesystem_and_format_if_necessary(true);
         count = 0;
         long_push = 0;

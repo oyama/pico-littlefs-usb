@@ -10,6 +10,7 @@
 #include <ctype.h>
 #include <math.h>
 #include <lfs.h>
+#include "unicode.h"
 
 #define LITTLE_ENDIAN16(x) (x)
 #define LITTLE_ENDIAN32(x) (x)
@@ -41,15 +42,15 @@ typedef struct {
     uint8_t LDIR_Name3[4];
 } fat_lfn_t;
 
-enum {
-  DISK_BLOCK_NUM  = 16, // 8KB is the smallest size that windows allow to mount
-  DISK_BLOCK_SIZE = 512
-};
+#define DISK_BLOCK_NUM    128
+#define DISK_BLOCK_SIZE   512
 
 
+void mimic_fat_initialize_cache(void);
+void mimic_fat_cleanup_cache(void);
 void mimic_fat_boot_sector(void *buffer, uint32_t bufsize);
 void mimic_fat_table(void *buffer, uint32_t bufsize);
+void mimic_fat_read_cluster(uint32_t cluster, void *buffer, uint32_t bufsize);
 void mimic_fat_root_dir_entry(void *buffer, uint32_t bufsize);
-void mimic_fat_file_entry(uint32_t fat_sector, void *buffer, uint32_t bufsize);
-
+void mimic_fat_write(uint8_t lun, uint32_t fat_sector, uint32_t offset, void *buffer, uint32_t bufsize);
 #endif

@@ -9,7 +9,7 @@
 
 
 static bool ejected = false;
-bool usb_device_enable = false;
+bool usb_device_enable = true;
 
 
 void tud_msc_inquiry_cb(uint8_t lun, uint8_t vendor_id[8], uint8_t product_id[16], uint8_t product_rev[4]) {
@@ -25,6 +25,8 @@ void tud_msc_inquiry_cb(uint8_t lun, uint8_t vendor_id[8], uint8_t product_id[16
 }
 
 bool tud_msc_test_unit_ready_cb(uint8_t lun) {
+    (void)lun;
+
     return usb_device_enable;
 }
 
@@ -51,7 +53,9 @@ bool tud_msc_start_stop_cb(uint8_t lun, uint8_t power_condition, bool start, boo
 }
 
 int32_t tud_msc_read10_cb(uint8_t lun, uint32_t lba, uint32_t offset, void* buffer, uint32_t bufsize) {
-    (void) lun;
+    (void)lun;
+    (void)offset;
+
     if ( lba >= DISK_BLOCK_NUM ) return -1;
 
     if (lba == 0) { // read Boot sector
@@ -60,18 +64,15 @@ int32_t tud_msc_read10_cb(uint8_t lun, uint32_t lba, uint32_t offset, void* buff
     } else if (lba == 1) {  // read FAT table
         mimic_fat_table(buffer, bufsize);
         return (int32_t)bufsize;
-    } else if (lba == 2) { // read Root dir entry
-        mimic_fat_root_dir_entry(buffer, bufsize);
-        return (int32_t)bufsize;
-    } else { // data entry
-        mimic_fat_file_entry(lba, buffer, bufsize);
+    } else { // root dir entry or other cluster
+        mimic_fat_read_cluster(lba - 1, buffer, bufsize);
         return (int32_t)bufsize;
     }
 }
 
 bool tud_msc_is_writable_cb (uint8_t lun) {
     (void) lun;
-    return false; // READ ONLY
+    return true;
 }
 
 int32_t tud_msc_write10_cb(uint8_t lun, uint32_t lba, uint32_t offset, uint8_t* buffer, uint32_t bufsize) {
@@ -80,7 +81,7 @@ int32_t tud_msc_write10_cb(uint8_t lun, uint32_t lba, uint32_t offset, uint8_t* 
 
     // out of ramdisk
     if ( lba >= DISK_BLOCK_NUM ) return -1;
-
+    mimic_fat_write(lun, lba, offset, buffer, bufsize);
     return (int32_t) bufsize;
 }
 
@@ -111,4 +112,16 @@ int32_t tud_msc_scsi_cb (uint8_t lun, uint8_t const scsi_cmd[16], void* buffer, 
         }
     }
     return (int32_t)resplen;
+}
+
+void tud_mount_cb(void) {
+    printf("\e[45mmount\e[0m\n");
+    mimic_fat_initialize_cache();
+}
+
+void tud_suspend_cb(bool remote_wakeup_en) {
+    (void)remote_wakeup_en;
+
+    printf("\e[45msuspend\e[0m\n");
+    mimic_fat_cleanup_cache();
 }
