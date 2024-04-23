@@ -2,7 +2,6 @@
 
 
 extern const struct lfs_config lfs_pico_flash_config;  // littlefs_driver.c
-extern int32_t tud_msc_read10_cb(uint8_t lun, uint32_t lba, uint32_t offset, void* buffer, uint32_t bufsize);
 extern int32_t tud_msc_write10_cb(uint8_t lun, uint32_t lba, uint32_t offset, void* buffer, uint32_t bufsize);
 
 static lfs_t fs;

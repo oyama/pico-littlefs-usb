@@ -9,9 +9,8 @@ Littlefs is widely used as a reliable file system for microcontrollers. However,
 The demo operates as follows:
 
 - Each time the BOOTSEL button is clicked, the number of clicks is added to the `SENSOR.TXT` file in the littlefs file system.
-- When the BOOTSEL button on the Pico is clicked for the first time, it starts as a USB stick.
 - When the Pico is connected to the host PC via USB, it will be mounted as a read-only USB flash drive with a FAT12 file system.
-- Holding down the BOOTSEL button for 10 seconds will format the littlefs file system.
+- Holding down the BOOTSEL button for 3 seconds will format the littlefs file system.
 
 ## Build and Installation
 

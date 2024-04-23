@@ -56,6 +56,16 @@ void print_dir_entry(void *buffer) {
     }
 }
 
+void update_fat_table(uint8_t *buffer, uint16_t cluster, uint16_t value) {
+    uint16_t offset = (uint16_t)floor((float)cluster + ((float)cluster / 2)) % DISK_BLOCK_SIZE;
+    if (cluster & 0x01) {
+        buffer[offset] = (buffer[offset] & 0x0F) | (value << 4);
+        buffer[offset + 1] = value >> 4;
+    } else {
+        buffer[offset] = value;
+        buffer[offset + 1] = (buffer[offset + 1] & 0xF0) | ((value >> 8) & 0x0F);
+    }
+}
 
 void create_file(lfs_t *fs, const unsigned char *path, const unsigned char *content) {
     lfs_file_t f;

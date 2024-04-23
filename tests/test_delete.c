@@ -1,0 +1,69 @@
+#include "tests.h"
+
+
+extern const struct lfs_config lfs_pico_flash_config;  // littlefs_driver.c
+extern int32_t tud_msc_write10_cb(uint8_t lun, uint32_t lba, uint32_t offset, void* buffer, uint32_t bufsize);
+
+static lfs_t fs;
+
+
+#define MESSAGE  "Please delete me!\n"
+
+static void setup(void) {
+    int err = lfs_format(&fs, &lfs_pico_flash_config);
+    assert(err == 0);
+    err = lfs_mount(&fs, &lfs_pico_flash_config);
+    assert(err == 0);
+
+    create_file(&fs, "DELETEME.TXT", MESSAGE);
+}
+
+static void reload(void) {
+    lfs_unmount(&fs);
+    int err = lfs_mount(&fs, &lfs_pico_flash_config);
+    assert(err == 0);
+}
+
+static void cleanup(void) {
+    lfs_unmount(&fs);
+}
+
+static void test_delete_file(void) {
+    setup();
+
+    mimic_fat_initialize_cache();
+
+    // Update procedure from the USB layer
+    uint16_t cluster = 2;
+    uint8_t buffer[512];
+
+    // update dir entry. Assign a delete flag to the filename
+    fat_dir_entry_t root[16] = {
+        {.DIR_Name = "littlefsUSB", .DIR_Attr = 0x08, .DIR_FstClusLO = 0, .DIR_FileSize = 0},
+        {.DIR_Name = "DELETEMETXT", .DIR_Attr = 0x20, .DIR_FstClusLO = cluster, .DIR_FileSize = strlen(MESSAGE)},
+    };
+    root[1].DIR_Name[0] = 0xE5;  // delete flag
+    tud_msc_write10_cb(0, 2, 0, root, sizeof(root));  // update directory entry
+
+    // update File allocation table
+    uint8_t fat_table[512] = {0xF8, 0xFF, 0xFF, 0xFF, 0x0F};  // With cluster 2 allocated
+    update_fat_table(fat_table, cluster, 0x000);
+    tud_msc_write10_cb(0, 1, 0, fat_table, sizeof(fat_table));  // update file allocated table
+
+    reload();
+
+    // Test reflection on the littlefs layer
+    struct lfs_info finfo;
+    int err = lfs_stat(&fs, "DELETEME.TXT", &finfo);
+    assert(err ==  LFS_ERR_NOENT);
+
+    cleanup();
+}
+
+void test_delete(void) {
+    printf("delete .................");
+
+    test_delete_file();
+
+    printf("ok\n");
+}

@@ -10,6 +10,10 @@ add_executable(tests
   util.c
   test_create.c
   test_read.c
+  test_update.c
+  test_rename.c
+  test_move.c
+  test_delete.c
 )
 
 target_link_libraries(tests

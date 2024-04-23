@@ -12,6 +12,10 @@ int main(void) {
 
     test_create();
     test_read();
+    test_update();
+    test_rename();
+    test_move();
+    test_delete();
 
     printf("All tests are ok\n");
 }

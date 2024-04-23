@@ -25,17 +25,6 @@ static void cleanup(void) {
     lfs_unmount(&fs);
 }
 
-static void update_fat_table(uint8_t *buffer, uint16_t cluster, uint16_t value) {
-    uint16_t offset = (uint16_t)floor((float)cluster + ((float)cluster / 2)) % DISK_BLOCK_SIZE;
-    if (cluster & 0x01) {
-        buffer[offset] = (buffer[offset] & 0x0F) | (value << 4);
-        buffer[offset + 1] = value >> 4;
-    } else {
-        buffer[offset] = value;
-        buffer[offset + 1] = (buffer[offset + 1] & 0xF0) | ((value >> 8) & 0x0F);
-    }
-}
-
 static void test_create_file(void) {
     uint8_t buffer[512];
     const uint8_t message[] = "Hello World\n";
@@ -43,7 +32,7 @@ static void test_create_file(void) {
     setup();
     mimic_fat_initialize_cache();
 
-    // Update procedure from the USB layer
+    // Create procedure from the USB layer
     uint16_t cluster = 2;
     memset(buffer, 0, sizeof(buffer));
     strncpy(buffer, message, sizeof(buffer));

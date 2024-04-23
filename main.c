@@ -85,7 +85,7 @@ static void sensor_logging_task(void) {
     } else {
         long_push = 0;
     }
-    if (long_push > 25000) { // Long-push BOOTSEL button
+    if (long_push > 35000) { // Long-push BOOTSEL button
         test_filesystem_and_format_if_necessary(true);
         count = 0;
         long_push = 0;

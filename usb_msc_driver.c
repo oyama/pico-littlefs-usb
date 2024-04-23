@@ -115,11 +115,13 @@ int32_t tud_msc_scsi_cb (uint8_t lun, uint8_t const scsi_cmd[16], void* buffer, 
 }
 
 void tud_mount_cb(void) {
-    printf("\e[45mmount\n\e[0m");
+    printf("\e[45mmount\e[0m\n");
     mimic_fat_initialize_cache();
 }
 
-void tud_umount_cb(void) {
-    printf("\e[45munmount\n\e[0m");
+void tud_suspend_cb(bool remote_wakeup_en) {
+    (void)remote_wakeup_en;
+
+    printf("\e[45msuspend\e[0m\n");
     mimic_fat_cleanup_cache();
 }

@@ -92,14 +92,14 @@ static lfs_t real_filesystem;
 static void print_block(uint8_t *buffer, size_t l) {
     for (size_t i = 0; i < l; ++i) {
         if (isalnum(buffer[i])) {
-            printf_debug("'%c' ", buffer[i]);
+            printf("'%c' ", buffer[i]);
         } else {
-            printf_debug("0x%02x", buffer[i]);
+            printf("0x%02x", buffer[i]);
         }
         if (i % 16 == 15)
-            printf_debug("\n");
+            printf("\n");
         else
-            printf_debug(", ");
+            printf(", ");
     }
 }
 */
@@ -703,7 +703,7 @@ static int create_dir_entry_cache(const char *path, uint32_t parent_cluster, uin
  * Execute when USB is connected.
  */
 void mimic_fat_initialize_cache(void) {
-    printf(ANSI_RED "Mount: mimic_fat_initialize_cache()\n" ANSI_CLEAR);
+    printf(ANSI_RED "mimic_fat_initialize_cache()\n" ANSI_CLEAR);
 
     lfs_unmount(&real_filesystem);
     int err = lfs_mount(&real_filesystem, &lfs_pico_flash_config);
@@ -995,7 +995,11 @@ static void restore_directory_from(char *directory, uint32_t base_directory_clus
                 continue;
             }
             if (memcmp(dir[i].DIR_Name, "..         ", 11) == 0) {
-                parent = dir[i].DIR_FstClusLO;
+                /* NOTE: According to the FAT specification, the reference to the root
+                 * directory is `cluster==0`, but the actual state of the root directory
+                 * is `cluster==1`, so it needs to be corrected.
+                 */
+                parent = dir[i].DIR_FstClusLO != 0 ? dir[i].DIR_FstClusLO : 1;
                 continue;
             }
             if (dir[i].DIR_Name[0] == 0xE5)
@@ -1120,9 +1124,10 @@ void mimic_fat_read_cluster(uint32_t cluster, void *buffer, uint32_t bufsize) {
 
     memset(&result, 0, sizeof(result));
     int err = find_dir_entry_cache(&result, 1, base_cluster);
-    if (err < 0) {
+    if (err < 0)
         return;
-    }
+    if (err == 0)
+        return;
     if (result.is_directory) {
         read_temporary_file(cluster, buffer);
         return;
@@ -1512,7 +1517,6 @@ void mimic_fat_write(uint8_t lun, uint32_t request_block, uint32_t offset, void 
     (void)lun;
     (void)offset;
     find_dir_entry_cache_result_t result;
-
 
     if (request_block == 0) // master boot record
         return;
