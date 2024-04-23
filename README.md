@@ -9,7 +9,8 @@ Littlefs is widely used as a reliable file system for microcontrollers. However,
 The demo operates as follows:
 
 - Each time the BOOTSEL button is clicked, the number of clicks is added to the `SENSOR.TXT` file in the littlefs file system.
-- When the Pico is connected to the host PC via USB, it will be mounted as a read-only USB flash drive with a FAT12 file system.
+- When the Pico is connected to the host PC via USB, it will be mounted as a USB flash drive with a FAT12 file system.
+- As a USB flash drive, you can create, read, update, and delete files in littlefs. However, moving directories is not supported.
 - Holding down the BOOTSEL button for 3 seconds will format the littlefs file system.
 
 ## Build and Installation
@@ -47,6 +48,8 @@ FAT12 is a very simple file system and can be easily mimicked. Depending on the 
 - Block 3 and later: Returns littlefs file blocks or directory entries.
 
 Upon USB connection, all files in the littlefs file system are searched to build a cache of FAT directory entries. Read requests from the USB host determine the type (file or directory) of the requested object based on the cache. Requests for directories are sent directly from the cache, while requests for files open the corresponding file in littlefs and send its content. Write requests involve updating the cache and reflecting changes in littlefs. The cache is updated based on the differences in directory entries.
+
+See `FAT_OPERATION.md` for details on the sequence of disk operations.
 
 ## Testing
 
