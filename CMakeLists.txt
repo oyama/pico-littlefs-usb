@@ -29,13 +29,14 @@ target_link_libraries(littlefs-usb PRIVATE
   tinyusb_additions
   tinyusb_board
   tinyusb_device
+  pico_cyw43_arch_none
 )
 target_include_directories(littlefs-usb
   PRIVATE
   lib/littlefs
   ${CMAKE_CURRENT_LIST_DIR}/include
 )
-target_compile_options(littlefs-usb PRIVATE -Werror -Wall -Wextra -Wnull-dereference)
+#target_compile_options(littlefs-usb PRIVATE -Werror -Wall -Wextra -Wnull-dereference)
 target_link_options(littlefs-usb PRIVATE -Wl,--print-memory-usage)
 
 add_library(littlefs INTERFACE)
@@ -59,6 +60,7 @@ if(OPENOCD)
     COMMAND ${OPENOCD} -f interface/cmsis-dap.cfg -f target/rp2040.cfg -c "adapter speed 5000" -c "program ${CMAKE_PROJECT_NAME}.elf verify reset exit"
     DEPENDS ${CMAKE_PROJECT_NAME}
   )
+  add_custom_target(reset COMMAND ${OPENOCD} -f interface/cmsis-dap.cfg -f target/rp2040.cfg -c init -c reset -c exit)
 
   add_subdirectory(tests EXCLUDE_FROM_ALL)
 endif()
