@@ -23,8 +23,8 @@
  *
  */
 
-#ifndef _TUSB_CONFIG_H_
-#define _TUSB_CONFIG_H_
+#ifndef PICO_LITTLEFS_USB_TUSB_CONFIG_H_
+#define PICO_LITTLEFS_USB_TUSB_CONFIG_H_
 
 #ifdef __cplusplus
  extern "C" {
@@ -111,4 +111,4 @@
  }
 #endif
 
-#endif /* _TUSB_CONFIG_H_ */
+#endif /* PICO_LITTLEFS_USB_TUSB_CONFIG_H_ */

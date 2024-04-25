@@ -38,6 +38,8 @@ target_include_directories(littlefs-usb
 target_compile_options(littlefs-usb PRIVATE -Werror -Wall -Wextra -Wnull-dereference)
 target_link_options(littlefs-usb PRIVATE -Wl,--print-memory-usage)
 
+target_compile_options(pico_cyw43_arch_none INTERFACE -Wno-unused-parameter)
+
 add_library(littlefs INTERFACE)
 target_sources(littlefs INTERFACE
   lib/littlefs/lfs.c
@@ -52,6 +54,10 @@ target_link_libraries(littlefs INTERFACE hardware_flash)
 pico_enable_stdio_usb(littlefs-usb 1)
 pico_add_extra_outputs(littlefs-usb)
 
+option(TRACE "Enable trace log" OFF)
+if(TRACE)
+  target_compile_options(littlefs-usb PRIVATE -DENABLE_TRACE)
+endif()
 
 find_program(OPENOCD openocd)
 if(OPENOCD)
@@ -59,6 +65,7 @@ if(OPENOCD)
     COMMAND ${OPENOCD} -f interface/cmsis-dap.cfg -f target/rp2040.cfg -c "adapter speed 5000" -c "program ${CMAKE_PROJECT_NAME}.elf verify reset exit"
     DEPENDS ${CMAKE_PROJECT_NAME}
   )
+  add_custom_target(reset COMMAND ${OPENOCD} -f interface/cmsis-dap.cfg -f target/rp2040.cfg -c init -c reset -c exit)
 
   add_subdirectory(tests EXCLUDE_FROM_ALL)
 endif()

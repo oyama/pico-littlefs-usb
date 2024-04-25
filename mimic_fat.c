@@ -10,17 +10,18 @@
 #define ANSI_RED "\e[31m"
 #define ANSI_CLEAR "\e[0m"
 
-#ifndef NDEBUG
-#define printf_debug(...) (printf(__VA_ARGS__))
+#ifdef  ENABLE_TRACE
+#define TRACE(...) (printf(__VA_ARGS__))
 #else
-#define printf_debug(...) ((void)0)
+#define TRACE(...) ((void)0)
 #endif
 
 
 extern const struct lfs_config lfs_pico_flash_config;  // littlefs_driver.c
 
-static const size_t FAT_SHORT_NAME_MAX = 11;
-static const size_t FAT_LONG_FILENAME_CHUNK_MAX = 13;
+#define FAT_SHORT_NAME_MAX           11
+#define FAT_LONG_FILENAME_CHUNK_MAX  13
+
 
 static uint8_t fat_disk_image[1][DISK_BLOCK_SIZE] = {
   //------------- Block0: Boot Sector -------------//
@@ -86,7 +87,15 @@ static uint8_t fat_table[DISK_BLOCK_SIZE] = {
 };
 
 static lfs_t real_filesystem;
+static bool usb_device_is_enabled = false;
 
+bool mimic_fat_usb_device_is_enabled(void) {
+    return usb_device_is_enabled;
+}
+
+void mimic_fat_update_usb_device_is_enabled(bool enable) {
+    usb_device_is_enabled = enable;
+}
 
 /*
 static void print_block(uint8_t *buffer, size_t l) {
@@ -107,7 +116,7 @@ static void print_block(uint8_t *buffer, size_t l) {
 static void print_dir_entry(void *buffer) {
     uint8_t pbuffer[11+1];
     fat_dir_entry_t *dir = (fat_dir_entry_t *)buffer;
-    printf_debug("--------\n");
+    TRACE("--------\n");
     for (size_t i = 0; i < DISK_BLOCK_SIZE / sizeof(fat_dir_entry_t); i++) {
         if (dir->DIR_Name[0] == '\0') {
             break;
@@ -115,7 +124,7 @@ static void print_dir_entry(void *buffer) {
         if ((dir->DIR_Attr & 0x0F) != 0x0F) {
             memcpy(pbuffer, &dir->DIR_Name, 11);
             pbuffer[11] = '\0';
-            printf_debug("name='%s' attr=0x%02X timeTenth=%u, CrtDate=%u,%u"
+            TRACE("name='%s' attr=0x%02X timeTenth=%u, CrtDate=%u,%u"
                    " writeDateTime=%u,%u LstAccDate=%u Size=%lu cluster=%u\n",
                    pbuffer,
                    dir->DIR_Attr,
@@ -134,7 +143,7 @@ static void print_dir_entry(void *buffer) {
             utf16le[13] = '\0';
             char utf8[13 * 4 + 1];
             utf16le_to_utf8(utf8, sizeof(utf8), utf16le, 13);
-            printf_debug("name='%s' attr=0x%02X ord=0x%02X cluster=%u\n", utf8, lfn->LDIR_Attr, lfn->LDIR_Ord, dir->DIR_FstClusLO);
+            TRACE("name='%s' attr=0x%02X ord=0x%02X cluster=%u\n", utf8, lfn->LDIR_Attr, lfn->LDIR_Ord, dir->DIR_FstClusLO);
         }
         dir++;
     }
@@ -178,9 +187,9 @@ static uint16_t fat_table_value(int cluster) {
 
 /*
 static void print_fat_table(size_t l) {
-    printf_debug("FAT table-------\n");
+    TRACE("FAT table-------\n");
     for (size_t i = 0; i < l; i++) {
-        printf_debug(" cluster=%d fat=%03x\n", i, fat_table_value(i));
+        TRACE(" cluster=%d fat=%03x\n", i, fat_table_value(i));
     }
 }
 */
@@ -360,7 +369,6 @@ static void set_LFN_name123(fat_lfn_t *dir, const uint16_t *filename) {
     }
 }
 
-
 void set_volume_label_entry(fat_dir_entry_t *dir, const char *name) {
     uint8_t sfn_name[FAT_SHORT_NAME_MAX + 1];
     snprintf((char *)sfn_name, sizeof(sfn_name), "%-11s", name);
@@ -438,7 +446,7 @@ static void update_fat_table(uint16_t cluster, uint16_t value) {
  * Save buffers sent by the host to LFS temporary files
  */
 static bool save_temporary_file(uint32_t cluster, void *buffer) {
-    printf_debug("save_temporary_file: cluster=%lu\n", cluster);
+    TRACE("save_temporary_file: cluster=%lu\n", cluster);
 
     struct lfs_info finfo;
     int err = lfs_stat(&real_filesystem, ".mimic", &finfo);
@@ -522,7 +530,7 @@ static fat_dir_entry_t *append_dir_entry_volume_label(fat_dir_entry_t *entry, co
 }
 
 static fat_dir_entry_t *append_dir_entry_directory(fat_dir_entry_t *entry, struct lfs_info *finfo, uint32_t cluster) {
-    printf_debug("append_dir_entry_directory '%s'\n", finfo->name);
+    TRACE("append_dir_entry_directory '%s'\n", finfo->name);
 
     if (strcmp(finfo->name, ".") == 0 || strcmp(finfo->name, "..") == 0) {
         set_directory_entry(entry, finfo->name, cluster == 1 ? 0 : cluster);
@@ -531,12 +539,9 @@ static fat_dir_entry_t *append_dir_entry_directory(fat_dir_entry_t *entry, struc
         set_directory_entry(entry, finfo->name, cluster);
     } else {
         fat_dir_entry_t short_dir_entry;
-        uint8_t buffer[FAT_SHORT_NAME_MAX + 1];
 
         set_directory_entry(&short_dir_entry, finfo->name, cluster);
         create_shortened_short_filename_dir(short_dir_entry.DIR_Name, finfo->name);
-        memset(buffer, 0, sizeof(buffer));
-        memcpy(buffer, short_dir_entry.DIR_Name, FAT_SHORT_NAME_MAX);
         uint8_t check_sum = filename_check_sum(short_dir_entry.DIR_Name);
 
         uint16_t filename[LFS_NAME_MAX + 1];
@@ -545,8 +550,7 @@ static fat_dir_entry_t *append_dir_entry_directory(fat_dir_entry_t *entry, struc
 
         for (int i = long_filename_num; i >= 0; i--) {
             uint8_t order = i + 1;
-            uint16_t chunk[FAT_LONG_FILENAME_CHUNK_MAX + 1];
-            memset(chunk, 0, sizeof(chunk));
+            uint16_t chunk[FAT_LONG_FILENAME_CHUNK_MAX + 1] = {0};
             uint16_t *head = (uint16_t *)&(filename[i * FAT_LONG_FILENAME_CHUNK_MAX]);
             memcpy(chunk, head, sizeof(chunk));
             chunk[FAT_LONG_FILENAME_CHUNK_MAX] = '\0';
@@ -555,8 +559,6 @@ static fat_dir_entry_t *append_dir_entry_directory(fat_dir_entry_t *entry, struc
             set_long_file_entry(entry, chunk, order, check_sum);
             entry++;
         }
-        memset(buffer, 0, sizeof(buffer));
-        memcpy(buffer, short_dir_entry.DIR_Name, FAT_SHORT_NAME_MAX);
         memcpy(entry, &short_dir_entry, sizeof(short_dir_entry));
     }
     entry++;
@@ -564,19 +566,15 @@ static fat_dir_entry_t *append_dir_entry_directory(fat_dir_entry_t *entry, struc
 }
 
 static fat_dir_entry_t *append_dir_entry_file(fat_dir_entry_t *entry, struct lfs_info *finfo, uint32_t cluster) {
-    printf_debug("append_dir_entry_file '%s' cluster=%lu\n", finfo->name, cluster);
+    TRACE("append_dir_entry_file '%s' cluster=%lu\n", finfo->name, cluster);
 
     if (is_short_filename_file((uint8_t *)finfo->name)) {
         set_file_entry(entry, finfo, cluster);
     } else {
         fat_dir_entry_t short_dir_entry;
-        uint8_t buffer[FAT_SHORT_NAME_MAX + 1];
-
         set_file_entry(&short_dir_entry, finfo, cluster);
         create_shortened_short_filename(short_dir_entry.DIR_Name, finfo->name);
 
-        memset(buffer, 0, sizeof(buffer));
-        memcpy(buffer, short_dir_entry.DIR_Name, FAT_SHORT_NAME_MAX);
         uint8_t check_sum = filename_check_sum(short_dir_entry.DIR_Name);
 
         uint16_t filename[LFS_NAME_MAX + 1];
@@ -585,8 +583,7 @@ static fat_dir_entry_t *append_dir_entry_file(fat_dir_entry_t *entry, struct lfs
 
         for (int i = long_filename_num; i >= 0; i--) {
             uint8_t order = i + 1;
-            uint16_t chunk[FAT_LONG_FILENAME_CHUNK_MAX + 1];
-            memset(chunk, 0, sizeof(chunk));
+            uint16_t chunk[FAT_LONG_FILENAME_CHUNK_MAX + 1] = {0};
             uint16_t *head = (uint16_t *)&(filename[i * FAT_LONG_FILENAME_CHUNK_MAX]);
             memcpy(chunk, head, sizeof(chunk));
             chunk[FAT_LONG_FILENAME_CHUNK_MAX] = '\0';
@@ -595,8 +592,6 @@ static fat_dir_entry_t *append_dir_entry_file(fat_dir_entry_t *entry, struct lfs
             set_long_file_entry(entry, chunk, order, check_sum);
             entry++;
         }
-        memset(buffer, 0, sizeof(buffer));
-        memcpy(buffer, short_dir_entry.DIR_Name, FAT_SHORT_NAME_MAX);
         memcpy(entry, &short_dir_entry, sizeof(short_dir_entry));
     }
 
@@ -610,13 +605,13 @@ static fat_dir_entry_t *append_dir_entry_file(fat_dir_entry_t *entry, struct lfs
  * Recursively traverse the specified base file system directory and update cache and allocation tables.
  */
 static int create_dir_entry_cache(const char *path, uint32_t parent_cluster, uint32_t *allocated_cluster) {
-    printf_debug("create_dir_entry_cache('%s', %lu, %lu)\n", path, parent_cluster, *allocated_cluster);
+    TRACE("create_dir_entry_cache('%s', %lu, %lu)\n", path, parent_cluster, *allocated_cluster);
     uint32_t current_cluster = *allocated_cluster;
-    fat_dir_entry_t *entry, dir_entry[DISK_BLOCK_SIZE / sizeof(fat_dir_entry_t)];
+    fat_dir_entry_t *entry;
+    fat_dir_entry_t dir_entry[DISK_BLOCK_SIZE / sizeof(fat_dir_entry_t)] = {0};
     lfs_dir_t dir;
     struct lfs_info finfo;
     char directory_path[LFS_NAME_MAX * 2 + 1 + 1];  // for sprintf "%s/%s"
-    memset(dir_entry, 0, sizeof(dir_entry));
     entry = dir_entry;
 
     if (parent_cluster == 0) {
@@ -703,7 +698,7 @@ static int create_dir_entry_cache(const char *path, uint32_t parent_cluster, uin
  * Execute when USB is connected.
  */
 void mimic_fat_initialize_cache(void) {
-    printf(ANSI_RED "mimic_fat_initialize_cache()\n" ANSI_CLEAR);
+    TRACE(ANSI_RED "mimic_fat_initialize_cache()\n" ANSI_CLEAR);
 
     lfs_unmount(&real_filesystem);
     int err = lfs_mount(&real_filesystem, &lfs_pico_flash_config);
@@ -745,7 +740,7 @@ void mimic_fat_cleanup_cache(void) {
         }
 
         snprintf((char *)filename, sizeof(filename), "%s/%s", ".mimic", finfo.name);
-        int err = lfs_remove(&real_filesystem, (const char *)filename);
+        err = lfs_remove(&real_filesystem, (const char *)filename);
         if (err != LFS_ERR_OK) {
             printf("mimic_fat_cleanup_cache: lfs_remove('%s') error=%d\n", filename, err);
             continue;
@@ -758,7 +753,7 @@ void mimic_fat_cleanup_cache(void) {
  * Returns the boot sector of the FAT image when USB requests sector 0
  */
 void mimic_fat_boot_sector(void *buffer, uint32_t bufsize) {
-    printf("\e[36mRead mimic_fat_boot_sector()\e[0m\n");
+    TRACE("\e[36mRead mimic_fat_boot_sector()\e[0m\n");
 
     uint8_t const *addr = fat_disk_image[0];
     memcpy(buffer, addr, bufsize);
@@ -769,7 +764,7 @@ void mimic_fat_boot_sector(void *buffer, uint32_t bufsize) {
  * Build a FAT table based on littlefs files.
  */
 void mimic_fat_table(void *buffer, uint32_t bufsize) {
-    printf("\e[36mRead cluster=0 mimic_fat_table()\e[0m\n");
+    TRACE("\e[36mRead cluster=0 mimic_fat_table()\e[0m\n");
 
     memcpy(buffer, fat_table, bufsize);
     //print_fat_table(10);
@@ -779,7 +774,7 @@ void mimic_fat_table(void *buffer, uint32_t bufsize) {
  * Restore the *result_filename of the file_cluster_id file belonging to directory_cluster_id.
  */
 static void restore_file_from(char *result_filename, uint32_t directory_cluster_id, uint32_t file_cluster_id) {
-    printf_debug("restore_file_from(directory_cluster_id=%lu, file_cluster_id=%lu)\n", directory_cluster_id, file_cluster_id);
+    TRACE("restore_file_from(directory_cluster_id=%lu, file_cluster_id=%lu)\n", directory_cluster_id, file_cluster_id);
     assert(file_cluster_id >= 2);
 
     if (directory_cluster_id == 0) {
@@ -791,16 +786,15 @@ static void restore_file_from(char *result_filename, uint32_t directory_cluster_
     int target = file_cluster_id;
 
     fat_dir_entry_t dir[16];
-    uint8_t result[LFS_NAME_MAX * 2 + 1 + 1]; // for sprintf "%s/%s"
-    memset(result, 0, sizeof(result));
+    uint8_t result[LFS_NAME_MAX * 2 + 1 + 1] = {0}; // for sprintf "%s/%s"
     if (directory_cluster_id == 0 && file_cluster_id == 0) {
-        printf_debug("  this is initial cluster\n");
+        TRACE("  this is initial cluster\n");
         //return;
     }
 
     uint32_t self = 0;
     while (cluster_id >= 0) {
-        printf_debug("restore_file_from: cluster_id=%u, parent=%u, target=%u\n", cluster_id, parent, target);
+        TRACE("restore_file_from: cluster_id=%u, parent=%u, target=%u\n", cluster_id, parent, target);
         if ((cluster_id == 0 || cluster_id == 1) && read_temporary_file(1, &dir[0]) != 0) {
             printf("temporary file '.mimic/%04d' not found\n", 1);
             break;
@@ -886,7 +880,7 @@ static void restore_file_from(char *result_filename, uint32_t directory_cluster_
                 }
                 is_long_filename = false;
             } else {
-                printf_debug("  unknown DIR_Attr=0x%02X\n", dir[i].DIR_Attr);
+                TRACE("  unknown DIR_Attr=0x%02X\n", dir[i].DIR_Attr);
             }
         }
 
@@ -904,12 +898,11 @@ static void restore_file_from(char *result_filename, uint32_t directory_cluster_
  */
 void mimic_fat_root_dir_entry(void *buffer, uint32_t bufsize) {
     (void)bufsize;
-    printf("\e[36mRead cluster=1 mimic_fat_root_dir_entry()\e[0m\n");
+    TRACE("\e[36mRead cluster=1 mimic_fat_root_dir_entry()\e[0m\n");
 
     read_temporary_file(1, buffer);
     return;
 }
-
 
 /*
  * Search for base cluster in the Allocation table
@@ -965,16 +958,15 @@ static void restore_directory_from(char *directory, uint32_t base_directory_clus
     int target = directory_cluster_id;
 
     fat_dir_entry_t dir[16];
-    uint8_t result[LFS_NAME_MAX * 2 + 1 + 1];  // for sprintf "%s/%s"
-    memset(result, 0, sizeof(result));
+    uint8_t result[LFS_NAME_MAX * 2 + 1 + 1] = {0};  // for sprintf "%s/%s"
 
     while (cluster_id >= 0) {
         if ((cluster_id == 0 || cluster_id == 1) && read_temporary_file(1, &dir[0]) != 0) {
-            printf_debug("temporary file '.mimic/%04d' not found\n", 1);
+            TRACE("temporary file '.mimic/%04d' not found\n", 1);
             break;
 
         } else if (read_temporary_file(cluster_id, &dir[0]) != 0) {
-            printf_debug("temporary file '.mimic/%04d' not found\n", cluster_id);
+            TRACE("temporary file '.mimic/%04d' not found\n", cluster_id);
             break;
         }
 
@@ -1050,15 +1042,20 @@ static void restore_directory_from(char *directory, uint32_t base_directory_clus
     directory[LFS_NAME_MAX] = '\0';
 }
 
+typedef enum find_dir_entry_cache_return_t {
+    FIND_DIR_ENTRY_CACHE_RESULT_ERROR = -1,
+    FIND_DIR_ENTRY_CACHE_RESULT_NOT_FOUND = 0,
+    FIND_DIR_ENTRY_CACHE_RESULT_FOUND = 1,
+} find_dir_entry_cache_return_t;
 
-static int find_dir_entry_cache(find_dir_entry_cache_result_t *result, uint32_t base_cluster, uint32_t target_cluster) {
-    //printf_debug("find_dir_entry_cache(base=%u, target=%u)\n", base_cluster, target_cluster);
+static find_dir_entry_cache_return_t find_dir_entry_cache(find_dir_entry_cache_result_t *result, uint32_t base_cluster, uint32_t target_cluster) {
+    //TRACE("find_dir_entry_cache(base=%u, target=%u)\n", base_cluster, target_cluster);
     fat_dir_entry_t entry[16];
 
     int err = read_temporary_file(base_cluster, entry);
     if (err != LFS_ERR_OK) {
-        printf_debug("find_dir_entry_cache: read_temporary_file(cluster=%lu) error=%d\n", base_cluster, err);
-        return err;
+        TRACE("find_dir_entry_cache: read_temporary_file(cluster=%lu) error=%d\n", base_cluster, err);
+        return FIND_DIR_ENTRY_CACHE_RESULT_ERROR;
     }
 
     for (int i = (base_cluster == 1 ? 1 : 2); i < 16; i++) {
@@ -1078,26 +1075,21 @@ static int find_dir_entry_cache(find_dir_entry_cache_result_t *result, uint32_t 
                 restore_directory_from(result->path, base_cluster, target_cluster);
             else
                 restore_file_from(result->path, base_cluster, target_cluster);
-            return 1;
+            return FIND_DIR_ENTRY_CACHE_RESULT_FOUND;
         }
         if ((entry[i].DIR_Attr & 0x10) == 0)
             continue;
 
-        err = find_dir_entry_cache(result, entry[i].DIR_FstClusLO, target_cluster);
-        if (err < 0) {
-            return err;
-        } else if (err == 1) {
-            return 1;
-        }
+        find_dir_entry_cache_return_t r = find_dir_entry_cache(result, entry[i].DIR_FstClusLO, target_cluster);
+        if (r != FIND_DIR_ENTRY_CACHE_RESULT_NOT_FOUND)
+            return r;
     }
-    return 0;
+    return FIND_DIR_ENTRY_CACHE_RESULT_NOT_FOUND;
 }
 
-
 static void create_blank_dir_entry_cache(uint32_t cluster, uint32_t parent_dir_cluster) {
-    fat_dir_entry_t entry[16];
+    fat_dir_entry_t entry[16] = {0};
 
-    memset(entry, 0, sizeof(entry));
     set_directory_entry(&entry[0], ".", cluster);
     set_directory_entry(&entry[1], "..", parent_dir_cluster == 1 ? 0 : parent_dir_cluster);
 
@@ -1107,10 +1099,10 @@ static void create_blank_dir_entry_cache(uint32_t cluster, uint32_t parent_dir_c
 /*
  */
 void mimic_fat_read_cluster(uint32_t cluster, void *buffer, uint32_t bufsize) {
-    printf("\e[36mRead cluster=%lu mimic_fat_read_cluster()\e[0m\n", cluster);
+    TRACE("\e[36mRead cluster=%lu mimic_fat_read_cluster()\e[0m\n", cluster);
 
     size_t offset = 0;
-    find_dir_entry_cache_result_t result;
+    find_dir_entry_cache_result_t result = {0};
 
     if (cluster == 1) {
         read_temporary_file(cluster, buffer);
@@ -1122,21 +1114,18 @@ void mimic_fat_read_cluster(uint32_t cluster, void *buffer, uint32_t bufsize) {
         return;
     }
 
-    memset(&result, 0, sizeof(result));
-    int err = find_dir_entry_cache(&result, 1, base_cluster);
-    if (err < 0)
-        return;
-    if (err == 0)
+    find_dir_entry_cache_return_t r = find_dir_entry_cache(&result, 1, base_cluster);
+    if (r != FIND_DIR_ENTRY_CACHE_RESULT_FOUND)
         return;
     if (result.is_directory) {
         read_temporary_file(cluster, buffer);
         return;
     }
 
-    printf_debug("mimic_fat_read_cluster: result.path='%s'\n", result.path);
+    TRACE("mimic_fat_read_cluster: result.path='%s'\n", result.path);
 
     lfs_file_t f;
-    err = lfs_file_open(&real_filesystem, &f, result.path, LFS_O_RDONLY);
+    int err = lfs_file_open(&real_filesystem, &f, result.path, LFS_O_RDONLY);
     if (err != LFS_ERR_OK) {
         printf("mimic_fat_read_cluster: lfs_file_open('%s') error=%d\n", result.path, err);
         return;
@@ -1152,11 +1141,11 @@ static void difference_of_dir_entry(fat_dir_entry_t *orig, fat_dir_entry_t *new,
                                     fat_dir_entry_t *delete)
 {
     bool is_found = false;
-    printf_debug("difference_of_dir_entry-----\n");
+    TRACE("difference_of_dir_entry-----\n");
     print_dir_entry(orig);
-    printf_debug("----------------------------\n");
+    TRACE("----------------------------\n");
     print_dir_entry(new);
-    printf_debug("----------------------------\n");
+    TRACE("----------------------------\n");
 
     if (memcmp(orig, new, sizeof(fat_dir_entry_t) * 16) == 0) {
         return;
@@ -1238,7 +1227,7 @@ static void difference_of_dir_entry(fat_dir_entry_t *orig, fat_dir_entry_t *new,
 }
 
 static int littlefs_mkdir(const char *filename) {
-    printf(ANSI_RED "littlefs_mkdir('%s')\n" ANSI_CLEAR, filename);
+    TRACE(ANSI_RED "littlefs_mkdir('%s')\n" ANSI_CLEAR, filename);
     struct lfs_info finfo;
 
     int err = lfs_stat(&real_filesystem, filename, &finfo);
@@ -1248,7 +1237,7 @@ static int littlefs_mkdir(const char *filename) {
 
     err = lfs_mkdir(&real_filesystem, filename);
     if (err != LFS_ERR_OK && err != LFS_ERR_EXIST) {
-        printf_debug("littlefs_mkdir: lfs_mkdir err=%d\n", err);
+        TRACE("littlefs_mkdir: lfs_mkdir err=%d\n", err);
         return err;
     }
 
@@ -1256,7 +1245,7 @@ static int littlefs_mkdir(const char *filename) {
 }
 
 static int littlefs_write(const char *filename, uint32_t cluster, size_t size) {
-    printf(ANSI_RED "littlefs_write('%s', cluster=%lu, size=%u)\n" ANSI_CLEAR, filename, cluster, size);
+    TRACE(ANSI_RED "littlefs_write('%s', cluster=%lu, size=%u)\n" ANSI_CLEAR, filename, cluster, size);
 
     uint8_t buffer[512];
 
@@ -1268,20 +1257,20 @@ static int littlefs_write(const char *filename, uint32_t cluster, size_t size) {
     lfs_file_t f;
     int err = lfs_file_open(&real_filesystem, &f, filename, LFS_O_RDWR|LFS_O_CREAT);
     if (err != LFS_ERR_OK) {
-        printf_debug("littlefs_write: lfs_file_open error=%d\n", err);
+        TRACE("littlefs_write: lfs_file_open error=%d\n", err);
         return err;
     }
 
     while (true) {
         err = read_temporary_file(cluster, buffer);
         if (err != LFS_ERR_OK) {
-            printf_debug("littlefs_write: read_temporary_file error=%d\n", err);
+            TRACE("littlefs_write: read_temporary_file error=%d\n", err);
             lfs_file_close(&real_filesystem, &f);
             return err;
         }
         size_t s = lfs_file_write(&real_filesystem, &f, buffer, sizeof(buffer));
         if (s != 512) {
-            printf_debug("littlefs_write: lfs_file_write, %u < %u\n", s, 512);
+            TRACE("littlefs_write: lfs_file_write, %u < %u\n", s, 512);
             lfs_file_close(&real_filesystem, &f);
             return -1;
         }
@@ -1294,7 +1283,7 @@ static int littlefs_write(const char *filename, uint32_t cluster, size_t size) {
     }
     err = lfs_file_truncate(&real_filesystem, &f, size);
     if (err != LFS_ERR_OK) {
-        printf_debug("littlefs_write: lfs_file_truncate err=%d\n", err);
+        TRACE("littlefs_write: lfs_file_truncate err=%d\n", err);
         lfs_file_close(&real_filesystem, &f);
         return err;
     }
@@ -1303,15 +1292,15 @@ static int littlefs_write(const char *filename, uint32_t cluster, size_t size) {
 }
 
 static int littlefs_remove(const char *filename) {
-    printf(ANSI_RED "littlefs_remove('%s')\n" ANSI_CLEAR, filename);
+    TRACE(ANSI_RED "littlefs_remove('%s')\n" ANSI_CLEAR, filename);
 
     if (strlen(filename) == 0) {
-        printf_debug("littlefs_remove: not allow brank filename\n");
+        TRACE("littlefs_remove: not allow brank filename\n");
         return LFS_ERR_INVAL;
     }
     int err = lfs_remove(&real_filesystem, filename);
     if (err != LFS_ERR_OK) {
-        printf_debug("littlefs_remove: lfs_remove: err=%d\n", err);
+        TRACE("littlefs_remove: lfs_remove: err=%d\n", err);
         return err;
     }
 
@@ -1324,31 +1313,24 @@ static int littlefs_remove(const char *filename) {
  * *src is an array of differences created by diff_dir_entry()
  */
 static void update_lfs_file_or_directory(fat_dir_entry_t *src, uint32_t dir_cluster_id) {
-    printf_debug("update_lfs_file_or_directory(dir_cluster_id=%lu)\n", dir_cluster_id);
+    TRACE("update_lfs_file_or_directory(dir_cluster_id=%lu)\n", dir_cluster_id);
     char filename[LFS_NAME_MAX + 1];
     char directory[LFS_NAME_MAX + 1];
-    uint16_t long_filename[LFS_NAME_MAX + 1];
-
-    memset(long_filename, 0, sizeof(long_filename));
+    uint16_t long_filename[LFS_NAME_MAX + 1] = {0};
 
     strcpy(directory, "");
 
     bool is_long_filename = false;
     for (int i = 0; i < 16; i++) {
         fat_dir_entry_t *dir = &src[i];
-        if (dir->DIR_Name[0] == '\0') {
+        if (dir->DIR_Name[0] == '\0')
             break;
-        }
-        if (dir->DIR_Name[0] == 0xE5 || dir->DIR_Name[0] == 0x05) {
+        if (dir->DIR_Name[0] == 0xE5 || dir->DIR_Name[0] == 0x05)
             continue;
-        }
-        if (memcmp(dir->DIR_Name, "..         ", 11) == 0) {
-
+        if (memcmp(dir->DIR_Name, "..         ", 11) == 0)
             continue;
-        }
-        if (memcmp(dir->DIR_Name,    ".          ", 11) == 0) {
+        if (memcmp(dir->DIR_Name, ".          ", 11) == 0)
             continue;
-        }
 
         if ((dir->DIR_Attr & 0x0F) == 0x0F) {
             fat_lfn_t *long_file = (fat_lfn_t *)dir;
@@ -1385,7 +1367,7 @@ static void update_lfs_file_or_directory(fat_dir_entry_t *src, uint32_t dir_clus
             }
 
             if (dir->DIR_FstClusLO == 0) {
-                printf_debug(" Files not yet assigned cluster=0\n");
+                TRACE(" Files not yet assigned cluster=0\n");
                 break;
             }
 
@@ -1394,7 +1376,7 @@ static void update_lfs_file_or_directory(fat_dir_entry_t *src, uint32_t dir_clus
             is_long_filename = false;
             continue;
         } else {
-            printf_debug(" unknown DIR_Attr = 0x%02X\n", dir->DIR_Attr);
+            TRACE(" unknown DIR_Attr = 0x%02X\n", dir->DIR_Attr);
         }
         is_long_filename = false;
     }
@@ -1404,9 +1386,9 @@ static void update_lfs_file_or_directory(fat_dir_entry_t *src, uint32_t dir_clus
  * Save the contents of real file system filename in the cluster cache
  */
 static void save_file_clusters(uint32_t cluster, const char *filename) {
-    printf_debug("save_file_clusters(cluster=%lu, '%s')\n", cluster, filename);
+    TRACE("save_file_clusters(cluster=%lu, '%s')\n", cluster, filename);
 
-    uint8_t buffer[DISK_BLOCK_SIZE];
+    uint8_t buffer[DISK_BLOCK_SIZE] = {0};
     uint32_t next_cluster = cluster;
     lfs_file_t f;
 
@@ -1428,7 +1410,6 @@ static void save_file_clusters(uint32_t cluster, const char *filename) {
                 offset * DISK_BLOCK_SIZE, seek_pos);
             break;
         }
-        memset(buffer, 0, sizeof(buffer));
         read_bytes = lfs_file_read(&real_filesystem, &f, buffer, sizeof(buffer));
         if (read_bytes < 0) {
             printf("save_file_clusters: lfs_file_read() error=%ld\n", read_bytes);
@@ -1474,19 +1455,15 @@ static void delete_dir_entry_cache(fat_dir_entry_t *src, uint32_t dir_cluster_id
 }
 
 static void update_dir_entry(uint32_t cluster, void *buffer) {
-    fat_dir_entry_t orig[16];
+    fat_dir_entry_t orig[16] = {0};
     fat_dir_entry_t *new = buffer;
-    fat_dir_entry_t dir_update[16];
-    fat_dir_entry_t dir_delete[16];
+    fat_dir_entry_t dir_update[16] = {0};
+    fat_dir_entry_t dir_delete[16] = {0};
 
-    memset(orig, 0, sizeof(orig));
     if (read_temporary_file(cluster, orig) != 0) {
         printf("update_dir_entry: entry not found cluster=%lu\n", cluster);
         return;
     }
-
-    memset(dir_update, 0, sizeof(dir_update));
-    memset(dir_delete, 0, sizeof(dir_delete));
 
     difference_of_dir_entry(orig, new, dir_update, dir_delete);
     delete_dir_entry_cache(dir_delete, cluster);
@@ -1524,31 +1501,28 @@ static void update_file_entry(uint32_t cluster, void *buffer, uint32_t bufsize,
     }
 }
 
-
-void mimic_fat_write(uint8_t lun, uint32_t request_block, uint32_t offset, void *buffer, uint32_t bufsize) {
+void mimic_fat_write(uint8_t lun, uint32_t request_block, uint32_t offset_, void *buffer, uint32_t bufsize) {
     (void)lun;
-    (void)offset;
+    (void)offset_;
     find_dir_entry_cache_result_t result;
 
     if (request_block == 0) // master boot record
         return;
 
     if (request_block == 1) { // FAT table
-        printf("\e[35mWrite FAT table\n" ANSI_CLEAR);
+        TRACE("\e[35mWrite FAT table\n" ANSI_CLEAR);
         memcpy(fat_table, buffer, sizeof(fat_table));
         return;
     }
 
-    printf("\e[35mWrite cluster=%lu\e[0m\n", request_block - 1);
+    TRACE("\e[35mWrite cluster=%lu\e[0m\n", request_block - 1);
     if (request_block == 2) { // root dir entry
-        printf_debug("mimic_fat_write: update root dir_entry\n");
+        TRACE("mimic_fat_write: update root dir_entry\n");
 
-        fat_dir_entry_t orig[16];
-        fat_dir_entry_t dir_update[16];
-        fat_dir_entry_t dir_delete[16];
+        fat_dir_entry_t orig[16] = {0};
+        fat_dir_entry_t dir_update[16] = {0};
+        fat_dir_entry_t dir_delete[16] = {0};
 
-        memset(dir_update, 0, sizeof(dir_update));
-        memset(dir_delete , 0, sizeof(dir_delete));
         read_temporary_file(1, orig);
 
         print_dir_entry(buffer);
@@ -1564,14 +1538,12 @@ void mimic_fat_write(uint8_t lun, uint32_t request_block, uint32_t offset, void 
         size_t offset = 0;
         uint32_t base_cluster = find_base_cluster_and_offset(request_block - 1, &offset);
         if (base_cluster == 0) {
-            printf_debug("mimic_fat_write: not allocated cluster\n");
+            TRACE("mimic_fat_write: not allocated cluster\n");
             save_temporary_file(request_block - 1, buffer);
 
-           // For hosts that write to unallocated space first
-           int err = find_dir_entry_cache(&result, 1, request_block - 1);
-            if (err < 0)  // error
-                return;
-            if (err == 0)  // not found
+            // For hosts that write to unallocated space first
+            find_dir_entry_cache_return_t r = find_dir_entry_cache(&result, 1, request_block - 1);
+            if (r != FIND_DIR_ENTRY_CACHE_RESULT_FOUND)  // error or not found
                 return;
             if (result.is_found && !result.is_directory) {
                 littlefs_write(result.path, request_block - 1, result.size);
@@ -1579,14 +1551,14 @@ void mimic_fat_write(uint8_t lun, uint32_t request_block, uint32_t offset, void 
             return;
         }
 
-        int err = find_dir_entry_cache(&result, 1, base_cluster);
-        if (err < 0) {
-            printf_debug("mimic_fat_write: find_dir_entry_cache(1, base_cluster=%lu) error=%d\n",
-                   base_cluster, err);
+        find_dir_entry_cache_return_t r = find_dir_entry_cache(&result, 1, base_cluster);
+        if (r == FIND_DIR_ENTRY_CACHE_RESULT_ERROR) {
+            TRACE("mimic_fat_write: find_dir_entry_cache(1, base_cluster=%lu) error=%d\n",
+                   base_cluster, r);
             return;
         }
-        if (err == 0) {
-            printf_debug(ANSI_RED "find_dir_entry_cache not found cluster=%lu\n" ANSI_CLEAR, base_cluster);
+        if (r == FIND_DIR_ENTRY_CACHE_RESULT_NOT_FOUND) {
+            TRACE(ANSI_RED "find_dir_entry_cache not found cluster=%lu\n" ANSI_CLEAR, base_cluster);
             save_temporary_file(request_block - 1, buffer);
             return;
         }

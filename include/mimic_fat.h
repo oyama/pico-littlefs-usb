@@ -4,8 +4,8 @@
  * Copyright 2024, Hiroyuki OYAMA. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  */
-#ifndef _MIMIC_FAT_H_
-#define _MIMIC_FAT_H_
+#ifndef PICO_LITTLEFS_USB_MIMIC_FAT_H_
+#define PICO_LITTLEFS_USB_MIMIC_FAT_H_
 
 #include <ctype.h>
 #include <math.h>
@@ -53,4 +53,7 @@ void mimic_fat_table(void *buffer, uint32_t bufsize);
 void mimic_fat_read_cluster(uint32_t cluster, void *buffer, uint32_t bufsize);
 void mimic_fat_root_dir_entry(void *buffer, uint32_t bufsize);
 void mimic_fat_write(uint8_t lun, uint32_t fat_sector, uint32_t offset, void *buffer, uint32_t bufsize);
+bool mimic_fat_usb_device_is_enabled(void);
+void mimic_fat_update_usb_device_is_enabled(bool enable);
+
 #endif

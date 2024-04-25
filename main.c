@@ -18,6 +18,8 @@
 #include <lfs.h>
 #include "bootsel_button.h"
 
+#include "mimic_fat.h"
+
 
 extern const struct lfs_config lfs_pico_flash_config;  // littlefs_driver.c
 

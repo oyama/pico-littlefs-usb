@@ -9,7 +9,6 @@
 
 
 static bool ejected = false;
-bool usb_device_enable = true;
 
 
 void tud_msc_inquiry_cb(uint8_t lun, uint8_t vendor_id[8], uint8_t product_id[16], uint8_t product_rev[4]) {
@@ -26,8 +25,7 @@ void tud_msc_inquiry_cb(uint8_t lun, uint8_t vendor_id[8], uint8_t product_id[16
 
 bool tud_msc_test_unit_ready_cb(uint8_t lun) {
     (void)lun;
-
-    return usb_device_enable;
+    return true;
 }
 
 void tud_msc_capacity_cb(uint8_t lun, uint32_t* block_count, uint16_t* block_size) {
@@ -116,6 +114,8 @@ int32_t tud_msc_scsi_cb (uint8_t lun, uint8_t const scsi_cmd[16], void* buffer, 
 
 void tud_mount_cb(void) {
     printf("\e[45mmount\e[0m\n");
+
+    mimic_fat_update_usb_device_is_enabled(true);
     mimic_fat_initialize_cache();
 }
 
@@ -124,4 +124,5 @@ void tud_suspend_cb(bool remote_wakeup_en) {
 
     printf("\e[45msuspend\e[0m\n");
     mimic_fat_cleanup_cache();
+    mimic_fat_update_usb_device_is_enabled(false);
 }
