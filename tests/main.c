@@ -3,6 +3,9 @@
 #include <tusb.h>
 
 
+#define ANSI_GREEN  "\e[32m"
+#define ANSI_CLEAR  "\e[0m"
+
 int main(void) {
     board_init();
     tud_init(BOARD_TUD_RHPORT);
@@ -17,5 +20,5 @@ int main(void) {
     test_move();
     test_delete();
 
-    printf("All tests are ok\n");
+    printf(ANSI_GREEN "All tests are ok\n" ANSI_CLEAR);
 }

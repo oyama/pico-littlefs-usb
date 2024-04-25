@@ -1,5 +1,5 @@
-#ifndef _BOOTSEL_BUTTON_H
-#define _BOOTSEL_BUTTON_H
+#ifndef PICO_LITTLEFS_USB_BOOTSEL_BUTTON_H_
+#define PICO_LITTLEFS_USB_BOOTSEL_BUTTON_H_
 
 #include <hardware/gpio.h>
 #include <hardware/structs/ioqspi.h>

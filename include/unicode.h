@@ -1,5 +1,5 @@
-#ifndef _UNICODE_H_
-#define _UNICODE_H_
+#ifndef PICO_LITTLEFS_USB_UNICODE_H_
+#define PICO_LITTLEFS_USB_UNICODE_H_
 
 #include <string.h>
 #include <stdint.h>

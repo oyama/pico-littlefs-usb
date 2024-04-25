@@ -4,8 +4,8 @@
  * Copyright 2024, Hiroyuki OYAMA. All rights reserved.
  * SPDX-License-Identifier: BSD-3-Clause
  */
-#ifndef _MIMIC_FAT_H_
-#define _MIMIC_FAT_H_
+#ifndef PICO_LITTLEFS_USB_MIMIC_FAT_H_
+#define PICO_LITTLEFS_USB_MIMIC_FAT_H_
 
 #include <ctype.h>
 #include <math.h>

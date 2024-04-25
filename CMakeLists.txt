@@ -36,8 +36,10 @@ target_include_directories(littlefs-usb
   lib/littlefs
   ${CMAKE_CURRENT_LIST_DIR}/include
 )
-#target_compile_options(littlefs-usb PRIVATE -Werror -Wall -Wextra -Wnull-dereference)
+target_compile_options(littlefs-usb PRIVATE -Werror -Wall -Wextra -Wnull-dereference)
 target_link_options(littlefs-usb PRIVATE -Wl,--print-memory-usage)
+
+target_compile_options(pico_cyw43_arch_none INTERFACE -Wno-unused-parameter)
 
 add_library(littlefs INTERFACE)
 target_sources(littlefs INTERFACE
@@ -53,6 +55,10 @@ target_link_libraries(littlefs INTERFACE hardware_flash)
 pico_enable_stdio_usb(littlefs-usb 1)
 pico_add_extra_outputs(littlefs-usb)
 
+option(TRACE "Enable trace log" OFF)
+if(TRACE)
+  target_compile_options(littlefs-usb PRIVATE -DENABLE_TRACE)
+endif()
 
 find_program(OPENOCD openocd)
 if(OPENOCD)

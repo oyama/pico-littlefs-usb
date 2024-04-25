@@ -31,10 +31,6 @@ static void test_read_file(void) {
     tud_msc_read10_cb(0, 0, 0, buffer, sizeof(buffer));  // Boot sector
     tud_msc_read10_cb(0, 1, 0, buffer, sizeof(buffer));  // Allocation table
     uint8_t expected_allocation_table[512] = {0xf8, 0xff, 0xff, 0xff, 0x0f, 0x00};
-    print_block(buffer, 10);
-    printf("\n");
-    print_block(expected_allocation_table, 10);
-
     assert(memcmp(buffer, expected_allocation_table, 6) == 0);
 
     tud_msc_read10_cb(0, 2, 0, buffer, sizeof(buffer));  // Root directory entry
