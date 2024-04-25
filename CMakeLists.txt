@@ -29,7 +29,6 @@ target_link_libraries(littlefs-usb PRIVATE
   tinyusb_additions
   tinyusb_board
   tinyusb_device
-  pico_cyw43_arch_none
 )
 target_include_directories(littlefs-usb
   PRIVATE

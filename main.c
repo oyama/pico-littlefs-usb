@@ -18,7 +18,6 @@
 #include <lfs.h>
 #include "bootsel_button.h"
 
-#include <pico/cyw43_arch.h>
 #include "mimic_fat.h"
 
 
@@ -98,18 +97,11 @@ static void sensor_logging_task(void) {
 int main(void) {
     board_init();
     tud_init(BOARD_TUD_RHPORT);
-    cyw43_arch_init();
     stdio_init_all();
 
     test_filesystem_and_format_if_necessary(false);
     while (true) {
-        if (mimic_fat_usb_device_is_enabled()) {
-            cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);
-        } else {
-            cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 0);
-            sensor_logging_task();
-        }
-        cyw43_arch_poll();
+        sensor_logging_task();
         tud_task();
     }
 }
