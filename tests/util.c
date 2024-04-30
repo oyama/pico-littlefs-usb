@@ -1,3 +1,4 @@
+#include <math.h>
 #include "tests.h"
 
 
@@ -24,7 +25,7 @@ void print_dir_entry(void *buffer) {
     uint8_t pbuffer[11+1];
     fat_dir_entry_t *dir = (fat_dir_entry_t *)buffer;
     printf("--------\n");
-    for (int i = 0; i < DISK_BLOCK_SIZE / sizeof(fat_dir_entry_t); i++) {
+    for (int i = 0; i < DISK_SECTOR_SIZE / sizeof(fat_dir_entry_t); i++) {
         if (dir->DIR_Name[0] == '\0') {
             break;
         }
@@ -57,7 +58,7 @@ void print_dir_entry(void *buffer) {
 }
 
 void update_fat_table(uint8_t *buffer, uint16_t cluster, uint16_t value) {
-    uint16_t offset = (uint16_t)floor((float)cluster + ((float)cluster / 2)) % DISK_BLOCK_SIZE;
+    uint16_t offset = (uint16_t)floor((float)cluster + ((float)cluster / 2)) % DISK_SECTOR_SIZE;
     if (cluster & 0x01) {
         buffer[offset] = (buffer[offset] & 0x0F) | (value << 4);
         buffer[offset + 1] = value >> 4;
@@ -65,6 +66,12 @@ void update_fat_table(uint8_t *buffer, uint16_t cluster, uint16_t value) {
         buffer[offset] = value;
         buffer[offset + 1] = (buffer[offset + 1] & 0xF0) | ((value >> 8) & 0x0F);
     }
+}
+
+uint16_t fat_sector_size(struct lfs_config *c) {
+    uint64_t storage_size = c->block_count * c->block_size;
+    uint32_t cluster_size = storage_size / (DISK_SECTOR_SIZE * 1);
+    return ceil((double)cluster_size / DISK_SECTOR_SIZE);
 }
 
 void create_file(lfs_t *fs, const unsigned char *path, const unsigned char *content) {

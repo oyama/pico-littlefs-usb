@@ -29,7 +29,8 @@ static void cleanup(void) {
 static void test_update_file(void) {
     setup();
 
-    mimic_fat_initialize_cache();
+    mimic_fat_init(&lfs_pico_flash_config);
+    mimic_fat_create_cache();
 
     // Update procedure from the USB layer
     uint16_t cluster = 3;  // unassigned cluster
@@ -76,7 +77,8 @@ static void test_update_file(void) {
 static void test_update_file_windows11(void) {
     setup();
 
-    mimic_fat_initialize_cache();
+    mimic_fat_init(&lfs_pico_flash_config);
+    mimic_fat_create_cache();
 
     // Update procedure from the USB layer
     uint16_t cluster = 3;  // unassigned cluster

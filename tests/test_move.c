@@ -32,7 +32,8 @@ static void cleanup(void) {
 static void test_move_file(void) {
     setup();
 
-    mimic_fat_initialize_cache();
+    mimic_fat_init(&lfs_pico_flash_config);
+    mimic_fat_create_cache();
 
     // Update procedure from the USB layer
     uint8_t buffer[512];

@@ -14,6 +14,7 @@ add_executable(tests
   test_rename.c
   test_move.c
   test_delete.c
+  test_large_fat.c
 )
 
 target_link_libraries(tests
@@ -31,6 +32,7 @@ target_include_directories(tests
   ${CMAKE_CURRENT_LIST_DIR}/../include
 )
 #target_compile_options(tests PRIVATE -Werror -Wall -Wextra -Wnull-dereference)
+
 pico_add_extra_outputs(tests)
 pico_enable_stdio_usb(tests 1)
 

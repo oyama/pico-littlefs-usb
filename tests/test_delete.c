@@ -40,7 +40,8 @@ static void cleanup(void) {
 static void test_delete_file(void) {
     setup_file();
 
-    mimic_fat_initialize_cache();
+    mimic_fat_init(&lfs_pico_flash_config);
+    mimic_fat_create_cache();
 
     // Update procedure from the USB layer
     uint16_t cluster = 2;
@@ -72,7 +73,8 @@ static void test_delete_file(void) {
 static void test_delete_dir(void) {
     setup_dir();
 
-    mimic_fat_initialize_cache();
+    mimic_fat_init(&lfs_pico_flash_config);
+    mimic_fat_create_cache();
 
     // Update procedure from the USB layer
     uint16_t cluster = 2;

@@ -24,9 +24,9 @@ static void test_read_file(void) {
     setup();
 
     create_file(&fs, "READ.TXT", "Hello World!\n");
-    lfs_unmount(&fs);
 
-    mimic_fat_initialize_cache();
+    mimic_fat_init(&lfs_pico_flash_config);
+    mimic_fat_create_cache();
 
     tud_msc_read10_cb(0, 0, 0, buffer, sizeof(buffer));  // Boot sector
     tud_msc_read10_cb(0, 1, 0, buffer, sizeof(buffer));  // Allocation table
@@ -53,7 +53,9 @@ static void test_sub_directory(void) {
 
     create_directory(&fs, "DIR1");
     create_file(&fs, "DIR1/SUB.TXT", "directory 1\n");
-    mimic_fat_initialize_cache();
+
+    mimic_fat_init(&lfs_pico_flash_config);
+    mimic_fat_create_cache();
 
     tud_msc_read10_cb(0, 0, 0, buffer, sizeof(buffer));  // Boot sector
     tud_msc_read10_cb(0, 1, 0, buffer, sizeof(buffer));  // Allocation table
@@ -87,7 +89,9 @@ static void test_long_filename(void) {
     setup();
 
     create_file(&fs, "over 8x3 long filename.TXT", "long file name\n");
-    mimic_fat_initialize_cache();
+
+    mimic_fat_init(&lfs_pico_flash_config);
+    mimic_fat_create_cache();
 
     tud_msc_read10_cb(0, 2, 0, buffer, sizeof(buffer));  // Root directory entry
 
@@ -100,6 +104,8 @@ static void test_long_filename(void) {
     set_long_filename_entry((fat_lfn_t *)&root[1], " filename.TXT", 0x42);
     set_long_filename_entry((fat_lfn_t *)&root[2], "over 8x3 long", 0x01);
     assert(dirent_cmp_lfn((fat_dir_entry_t *)buffer, root) == 0);
+
+    cleanup();
 }
 
 void test_read(void) {

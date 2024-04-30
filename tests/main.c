@@ -20,5 +20,7 @@ int main(void) {
     test_move();
     test_delete();
 
+    test_change_storage_size();
+
     printf(ANSI_GREEN "All tests are ok\n" ANSI_CLEAR);
 }
