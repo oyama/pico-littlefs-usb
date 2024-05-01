@@ -46,9 +46,9 @@ static void test_create_file(void) {
     strncpy(buffer, message, sizeof(buffer));
     tud_msc_write10_cb(0, fat_sectors + cluster, 0, buffer, sizeof(buffer));  // write to anonymous cache
 
-    uint8_t fat_table[512] = {0xF8, 0xFF, 0xFF, 0x00, 0x00};
-    update_fat_table(fat_table, cluster, 0xFFF);
-    tud_msc_write10_cb(0, first_fat_sector, 0, fat_table, sizeof(fat_table));  // update file allocated table
+    uint8_t fat[512] = {0xF8, 0xFF, 0xFF, 0x00, 0x00};
+    update_fat(fat, cluster, 0xFFF);
+    tud_msc_write10_cb(0, first_fat_sector, 0, fat, sizeof(fat));  // update file allocated table
 
     fat_dir_entry_t root[16] = {
         {.DIR_Name = "littlefsUSB", .DIR_Attr = 0x08, .DIR_FstClusLO = 0, .DIR_FileSize = 0},
@@ -98,9 +98,9 @@ static void test_create_file_windows11(void) {
     tud_msc_write10_cb(0, cluster + 1, 0, buffer, sizeof(buffer));
 
     // update File allocation table
-    uint8_t fat_table[512] = {0xF8, 0xFF, 0xFF, 0x00, 0x00};
-    update_fat_table(fat_table, cluster, 0xFFF);
-    tud_msc_write10_cb(0, 1, 0, fat_table, sizeof(fat_table));
+    uint8_t fat[512] = {0xF8, 0xFF, 0xFF, 0x00, 0x00};
+    update_fat(fat, cluster, 0xFFF);
+    tud_msc_write10_cb(0, 1, 0, fat, sizeof(fat));
 
     reload();
 
@@ -137,10 +137,10 @@ static void test_create_accross_blocksize(void) {
     strncpy(buffer, message + 512, sizeof(buffer));
     tud_msc_write10_cb(0, cluster + 2, 0, buffer, sizeof(buffer));  // write to 2nd block
 
-    uint8_t fat_table[512] = {0xF8, 0xFF, 0xFF, 0x00, 0x00};
-    update_fat_table(fat_table, cluster, cluster + 1);  // point next cluster
-    update_fat_table(fat_table, cluster + 1, 0xFFF);  // terminate allocate chain
-    tud_msc_write10_cb(0, 1, 0, fat_table, sizeof(fat_table));  // update file allocated table
+    uint8_t fat[512] = {0xF8, 0xFF, 0xFF, 0x00, 0x00};
+    update_fat(fat, cluster, cluster + 1);  // point next cluster
+    update_fat(fat, cluster + 1, 0xFFF);  // terminate allocate chain
+    tud_msc_write10_cb(0, 1, 0, fat, sizeof(fat));  // update file allocated table
 
     fat_dir_entry_t root[16] = {
         {.DIR_Name = "littlefsUSB", .DIR_Attr = 0x08, .DIR_FstClusLO = 0, .DIR_FileSize = 0},

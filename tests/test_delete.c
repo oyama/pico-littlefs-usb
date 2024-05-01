@@ -56,9 +56,9 @@ static void test_delete_file(void) {
     tud_msc_write10_cb(0, 2, 0, root, sizeof(root));  // update directory entry
 
     // update File allocation table
-    uint8_t fat_table[512] = {0xF8, 0xFF, 0xFF, 0xFF, 0x0F};  // With cluster 2 allocated
-    update_fat_table(fat_table, cluster, 0x000);
-    tud_msc_write10_cb(0, 1, 0, fat_table, sizeof(fat_table));  // update file allocated table
+    uint8_t fat[512] = {0xF8, 0xFF, 0xFF, 0xFF, 0x0F};  // With cluster 2 allocated
+    update_fat(fat, cluster, 0x000);
+    tud_msc_write10_cb(0, 1, 0, fat, sizeof(fat));  // update file allocated table
 
     reload();
 

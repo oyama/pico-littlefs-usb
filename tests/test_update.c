@@ -42,9 +42,9 @@ static void test_update_file(void) {
     tud_msc_write10_cb(0, cluster + 1, 0, buffer, sizeof(buffer));  // write to anonymous cache
 
     // update File allocation table
-    uint8_t fat_table[512] = {0xF8, 0xFF, 0xFF, 0xFF, 0x0F};  // With cluster 2 allocated
-    update_fat_table(fat_table, cluster, 0xFFF);
-    tud_msc_write10_cb(0, 1, 0, fat_table, sizeof(fat_table));  // update file allocated table
+    uint8_t fat[512] = {0xF8, 0xFF, 0xFF, 0xFF, 0x0F};  // With cluster 2 allocated
+    update_fat(fat, cluster, 0xFFF);
+    tud_msc_write10_cb(0, 1, 0, fat, sizeof(fat));  // update file allocated table
 
     // update dir entry. The cluster to which the file belongs is set to 0.
     fat_dir_entry_t root0[16] = {
@@ -93,9 +93,9 @@ static void test_update_file_windows11(void) {
     tud_msc_write10_cb(0, 2, 0, root0, sizeof(root0));  // update directory entry
 
     // update File allocation table
-    uint8_t fat_table[512] = {0xF8, 0xFF, 0xFF, 0xFF, 0x0F};  // With cluster 2 allocated
-    update_fat_table(fat_table, cluster, 0xFFF);
-    tud_msc_write10_cb(0, 1, 0, fat_table, sizeof(fat_table));  // update file allocated table
+    uint8_t fat[512] = {0xF8, 0xFF, 0xFF, 0xFF, 0x0F};  // With cluster 2 allocated
+    update_fat(fat, cluster, 0xFFF);
+    tud_msc_write10_cb(0, 1, 0, fat, sizeof(fat));  // update file allocated table
 
     // update dir entry. The clusters written in step 2 are specified.
     fat_dir_entry_t root1[16] = {
@@ -110,8 +110,8 @@ static void test_update_file_windows11(void) {
     tud_msc_write10_cb(0, cluster + 1, 0, buffer, sizeof(buffer));
 
     // update File allocation table
-    update_fat_table(fat_table, 2, 0x000);  // Release old allocated areas
-    tud_msc_write10_cb(0, 1, 0, fat_table, sizeof(fat_table));  // update file allocated table
+    update_fat(fat, 2, 0x000);  // Release old allocated areas
+    tud_msc_write10_cb(0, 1, 0, fat, sizeof(fat));  // update file allocated table
 
     reload();
 

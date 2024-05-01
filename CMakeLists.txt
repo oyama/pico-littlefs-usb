@@ -1,9 +1,6 @@
 cmake_minimum_required(VERSION 3.13...3.27)
 
-if(NOT PICO_SDK_PATH)
-  set(PICO_SDK_PATH ${CMAKE_CURRENT_LIST_DIR}/lib/pico-sdk)
-endif()
-include(${PICO_SDK_PATH}/external/pico_sdk_import.cmake)
+include(vendor/pico_sdk_import.cmake)
 
 project(littlefs-usb C CXX ASM)
 set(PICO_BOARD pico_w)
@@ -32,7 +29,7 @@ target_link_libraries(littlefs-usb PRIVATE
 )
 target_include_directories(littlefs-usb
   PRIVATE
-  lib/littlefs
+  vendor/littlefs
   ${CMAKE_CURRENT_LIST_DIR}/include
 )
 target_compile_options(littlefs-usb PRIVATE -Werror -Wall -Wextra -Wnull-dereference)
@@ -42,11 +39,11 @@ target_compile_options(pico_cyw43_arch_none INTERFACE -Wno-unused-parameter)
 
 add_library(littlefs INTERFACE)
 target_sources(littlefs INTERFACE
-  lib/littlefs/lfs.c
-  lib/littlefs/lfs_util.c
+  vendor/littlefs/lfs.c
+  vendor/littlefs/lfs_util.c
 )
 target_include_directories(littlefs INTERFACE
-  lib/littlefs
+  vendor/littlefs
 )
 target_compile_options(littlefs INTERFACE -Wno-unused-function -Wno-null-dereference)
 target_link_libraries(littlefs INTERFACE hardware_flash)

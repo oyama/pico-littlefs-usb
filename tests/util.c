@@ -57,7 +57,7 @@ void print_dir_entry(void *buffer) {
     }
 }
 
-void update_fat_table(uint8_t *buffer, uint16_t cluster, uint16_t value) {
+void update_fat(uint8_t *buffer, uint16_t cluster, uint16_t value) {
     uint16_t offset = (uint16_t)floor((float)cluster + ((float)cluster / 2)) % DISK_SECTOR_SIZE;
     if (cluster & 0x01) {
         buffer[offset] = (buffer[offset] & 0x0F) | (value << 4);

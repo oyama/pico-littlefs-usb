@@ -11,7 +11,7 @@ static struct lfs_config test_config = {
     .read_size      = 1,
     .prog_size      = FLASH_PAGE_SIZE,
     .block_size     = FLASH_SECTOR_SIZE,
-    .block_count    = 340 * 1024 / FLASH_SECTOR_SIZE,
+    .block_count    = (1024 * 1024 +  512*1024) / FLASH_SECTOR_SIZE,
     .cache_size     = FLASH_SECTOR_SIZE,
     .lookahead_size = 16,
     .block_cycles   = 500,
@@ -79,10 +79,13 @@ static void test_read_large_file(void) {
     int rc = lfs_file_open(&fs, &f, "LARGE.TXT", LFS_O_RDWR|LFS_O_CREAT);
     assert(rc == 0);
     uint8_t buffer[512];
-    for (size_t i = 0; i < 340; i++) {
+    size_t fat_size = 1024;
+
+    for (size_t i = 0; i < fat_size; i++) {
         memset(buffer, i & 0xFF, sizeof(buffer));
         lfs_ssize_t size = lfs_file_write(&fs, &f, buffer, sizeof(buffer));
         assert(size == sizeof(buffer));
+        printf(".");
     }
     rc = lfs_file_close(&fs, &f);
     assert(rc == 0);
@@ -101,19 +104,19 @@ static void test_read_large_file(void) {
     tud_msc_read10_cb(0, root_dir_sector, 0, buffer, sizeof(buffer));  // Root directory entry
     fat_dir_entry_t root[16] = {
         {.DIR_Name = "littlefsUSB", .DIR_Attr = 0x08, .DIR_FstClusLO = 0, .DIR_FileSize = 0},
-        {.DIR_Name = "LARGE   TXT", .DIR_Attr = 0x20, .DIR_FstClusLO = 2, .DIR_FileSize = 512*340},
+        {.DIR_Name = "LARGE   TXT", .DIR_Attr = 0x20, .DIR_FstClusLO = 2, .DIR_FileSize = 512*fat_size},
     };
     assert(dirent_cmp((fat_dir_entry_t *)buffer, root) == 0);
 
     uint32_t first_sector = root_dir_sector + 1;
-    for (size_t i = 0; i < 340; i++) {
+    for (size_t i = 0; i < fat_size; i++) {
         char expected[512];
         memset(expected, i & 0xFF, sizeof(expected));
 
         tud_msc_read10_cb(0, first_sector + i, 0, buffer, sizeof(buffer));
         assert(memcmp(expected, buffer, sizeof(expected)) == 0);
+        printf(".");
     }
-
     cleanup();
 }
 

@@ -27,7 +27,7 @@ void print_dir_entry(void *buffer);
 
 void create_file(lfs_t *fs, const unsigned char *path, const unsigned char *content);
 void create_directory(lfs_t *fs, const unsigned char *path);
-void update_fat_table(uint8_t *buffer, uint16_t cluster, uint16_t value);
+void update_fat(uint8_t *buffer, uint16_t cluster, uint16_t value);
 uint16_t fat_sector_size(struct lfs_config *c);
 
 int dirent_cmp(fat_dir_entry_t *a, fat_dir_entry_t *b);
