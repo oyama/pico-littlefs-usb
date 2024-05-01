@@ -42,11 +42,11 @@ typedef struct {
     uint8_t LDIR_Name3[4];
 } fat_lfn_t;
 
-#define DISK_SECTOR_NUM    128  // FIXME: littlefsのstoarge sizeによって決定する
 #define DISK_SECTOR_SIZE   512
 
 
 void mimic_fat_init(const struct lfs_config *c);
+size_t mimic_fat_total_sector_size(void);
 void mimic_fat_create_cache(void);
 void mimic_fat_cleanup_cache(void);
 void mimic_fat_read(uint8_t lun, uint32_t sector, void *buffer, uint32_t bufsize);
