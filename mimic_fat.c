@@ -103,19 +103,36 @@ void mimic_fat_update_usb_device_is_enabled(bool enable) {
 
 
 static void print_block(uint8_t *buffer, size_t l) {
+    size_t offset = 0;
     for (size_t i = 0; i < l; ++i) {
+        if (i % 16 == 0)
+            printf("0x%04u%s", offset, (i % 512) == 0 ? ">" : " ");
         if (isalnum(buffer[i])) {
             printf("'%c' ", buffer[i]);
         } else {
             printf("0x%02x", buffer[i]);
         }
-        if (i % 16 == 15)
+        if (i % 16 == 15) {
             printf("\n");
-        else
+            offset += 16;
+        } else {
             printf(", ");
+        }
     }
 }
 
+static void print_hex(uint8_t *buffer, size_t l) {
+    size_t offset = 0;
+    for (size_t i = 0; i < l; ++i) {
+        if (i % 16 == 0)
+            printf("0x%04u%s ", offset, (i % 512) == 0 ? ">" : " ");
+        printf("0x%02x,", buffer[i]);
+        if (i % 16 == 15) {
+            printf("\n");
+            offset += 16;
+        }
+    }
+}
 
 static void print_dir_entry(void *buffer) {
     uint8_t pbuffer[11+1];
@@ -233,10 +250,98 @@ static void update_fat(uint32_t cluster, uint16_t value) {
     }
 }
 
+#define BUFFER_SIZE  512
+#define END_OF_CLUSTER_CHAIN  0xFFF
+
+static size_t bulk_update_fat_buffer_read(size_t offset, void *buffer, size_t size) {
+    lfs_soff_t o = lfs_file_seek(&real_filesystem, &fat_cache, offset, LFS_SEEK_SET);
+    if (o < 0) {
+         printf("bulk_update_fat_buffer_read: lfs_file_seek error=%ld\n", o);
+         return 0;
+    }
+    lfs_ssize_t s = lfs_file_read(&real_filesystem, &fat_cache, buffer, size);
+    if (s < 0) {
+        printf("bulk_update_fat_buffer_read: lfs_file_read error=%ld\n", s);
+        return 0;
+    }
+    return (size_t)s;
+}
+
+static size_t bulk_update_fat_buffer_write(size_t offset, void *buffer, size_t size) {
+    lfs_soff_t o = lfs_file_seek(&real_filesystem, &fat_cache, offset, LFS_SEEK_SET);
+    if (o < 0) {
+        printf("bulk_update_fat_buffer_write: lfs_file_seek error=%ld\n", o);
+        return 0;
+    }
+    lfs_ssize_t s = lfs_file_write(&real_filesystem, &fat_cache, buffer, size);
+    if (s < 0) {
+        printf("bulk_update_fat_buffer_write: lfs_file_read error=%ld\n", s);
+        return 0;
+    }
+    return (size_t)s;
+}
+
+static size_t bulk_update_fat(uint32_t start_cluster, size_t size) {
+    size_t num_clusters = ceil((double)size / 512);
+    unsigned char buffer[BUFFER_SIZE];
+    unsigned int current_cluster = start_cluster;
+    unsigned int next_cluster;
+    int initial_offset = (3 * start_cluster) / 2;
+    int initial_sector = initial_offset / BUFFER_SIZE;
+
+    size_t read = bulk_update_fat_buffer_read(initial_sector * BUFFER_SIZE, buffer, sizeof(buffer));
+    if (read == 0)
+        return 0;
+
+    int sector_size = 512;
+
+    for (unsigned int i = 0; i < num_clusters; i++) {
+        int offset = floor((3 * current_cluster) / 2.0);
+        int buffer_index = offset % sector_size;
+
+        next_cluster = (i < num_clusters - 1) ? current_cluster + 1 : END_OF_CLUSTER_CHAIN;
+        if (current_cluster & 0x01) {
+            buffer[buffer_index] = (buffer[buffer_index] & 0x0F) | (next_cluster << 4);
+            buffer[buffer_index + 1] = (next_cluster >> 4) & 0xFF;
+        } else {
+            buffer[buffer_index] = next_cluster & 0xFF;
+            buffer[buffer_index + 1] = (buffer[buffer_index + 1] & 0xF0) | ((next_cluster >> 8) & 0x0F);
+        }
+
+        // FAT12 sector boundaries
+        if (((current_cluster & 0x01) && buffer_index + 2 >= sector_size) ||
+             (buffer_index + 1 >= sector_size))
+        {
+
+            size_t write = bulk_update_fat_buffer_write(initial_sector * BUFFER_SIZE, buffer, sizeof(buffer));
+            if (write == 0)
+                return 0;
+
+            initial_sector++;
+
+            read = bulk_update_fat_buffer_read(initial_sector * BUFFER_SIZE, buffer, sizeof(buffer));
+            if (read == 0)
+                return 0;
+
+            buffer_index = 0;
+            if (current_cluster & 0x01) {
+                buffer[buffer_index] = (next_cluster >> 4) & 0xFF;
+            } else {
+                buffer[buffer_index] = (buffer[buffer_index] & 0xF0) | ((next_cluster >> 8) & 0x0F);
+            }
+        }
+        current_cluster++;
+    }
+
+    size_t write = bulk_update_fat_buffer_write(initial_sector * BUFFER_SIZE, buffer, sizeof(buffer));
+    if (write == 0)
+        return 0;
+    return start_cluster + num_clusters + 1;
+}
+
 static void init_fat(void) {
     uint64_t storage_size = littlefs_lfs_config->block_count * littlefs_lfs_config->block_size;
     uint32_t cluster_size = storage_size / (DISK_SECTOR_SIZE * 1);
-    //uint16_t fat_sector_size = ceil(cluster_size / DISK_SECTOR_SIZE);
 
     struct lfs_info finfo;
     int err = lfs_stat(&real_filesystem, ".mimic", &finfo);
@@ -523,20 +628,10 @@ static void set_long_file_entry(fat_dir_entry_t *dir, uint16_t *lfn_chunk, uint8
 static bool save_temporary_file(uint32_t cluster, void *buffer) {
     TRACE("save_temporary_file: cluster=%lu\n", cluster);
 
-    struct lfs_info finfo;
-    int err = lfs_stat(&real_filesystem, ".mimic", &finfo);
-    if (err == LFS_ERR_NOENT) {
-        err = lfs_mkdir(&real_filesystem, ".mimic");
-        if (err != LFS_ERR_OK) {
-            printf("can't create .mimic directory: err=%d\n", err);
-            return false;
-        }
-    }
-
     char filename[LFS_NAME_MAX + 1];
     snprintf(filename, sizeof(filename), ".mimic/%04ld", cluster);
     lfs_file_t f;
-    err = lfs_file_open(&real_filesystem, &f, filename, LFS_O_RDWR|LFS_O_CREAT);
+    int err = lfs_file_open(&real_filesystem, &f, filename, LFS_O_RDWR|LFS_O_CREAT);
     if (err != LFS_ERR_OK) {
         printf("save_temporary_file: can't lfs_file_open '%s' err=%d\n", filename, err);
         return false;
@@ -554,6 +649,8 @@ static int read_temporary_file(uint32_t cluster, void *buffer) {
     snprintf(filename, sizeof(filename), ".mimic/%04ld", cluster);
     int err = lfs_file_open(&real_filesystem, &f, filename, LFS_O_RDONLY);
     if (err != LFS_ERR_OK) {
+        if (err == LFS_ERR_NOENT)
+            return err;
         printf("read_temporary_file: can't open '%s': err=%d\n", filename, err);
         return err;
     }
@@ -748,19 +845,8 @@ static int create_dir_entry_cache(const char *path, uint32_t parent_cluster, uin
 
         } else if (finfo.type == LFS_TYPE_REG) {
             uint32_t file_cluster = *allocated_cluster + 1;
-            if (finfo.size > 0) {
-                for (size_t i = ceil((double)finfo.size / DISK_SECTOR_SIZE); i > 0; i--) {
-                    *allocated_cluster += 1;
-                    if (i == 1) {
-                        update_fat(*allocated_cluster, 0xFFF);
-                    } else {
-                        update_fat(*allocated_cluster, *allocated_cluster + 1);
-                    }
-                }
-            }
-            print_fat(16);
-            TRACE(ANSI_RED "create_dir_entry_cache: append_dir_entry_file('%s', cluster=%lu)\n" ANSI_CLEAR, finfo.name, file_cluster);
-
+            if (finfo.size > 0)
+                *allocated_cluster = bulk_update_fat(file_cluster, finfo.size);
             entry = append_dir_entry_file(entry, &finfo, file_cluster);
         }
     }
@@ -806,7 +892,7 @@ void mimic_fat_cleanup_cache(void) {
         if (err == 0)
             break;
         if (err < 0) {
-            printf("mimic_fat_create_cache: lfs_dir_read('%s') error=%d\n", ".mimic", err);
+            printf("mimic_fat_cleanup_cache: lfs_dir_read('%s') error=%d\n", ".mimic", err);
             break;
         }
         if (strcmp(finfo.name, ".") == 0 ||
@@ -818,7 +904,7 @@ void mimic_fat_cleanup_cache(void) {
         snprintf((char *)filename, sizeof(filename), "%s/%s", ".mimic", finfo.name);
         err = lfs_remove(&real_filesystem, (const char *)filename);
         if (err != LFS_ERR_OK) {
-            printf("mimic_fat_create_cache: lfs_remove('%s') error=%d\n", filename, err);
+            printf("mimic_fat_cleanup_cache: lfs_remove('%s') error=%d\n", filename, err);
             continue;
         }
     }
@@ -1666,7 +1752,6 @@ void mimic_fat_write(uint8_t lun, uint32_t request_block, void *buffer, uint32_t
     if (is_fat_sector(request_block)) { // FAT table
         TRACE("\e[35mWrite FAT table\n" ANSI_CLEAR);
         save_fat_sector(request_block, buffer, bufsize);
-        print_fat(16);
         return;
     }
 

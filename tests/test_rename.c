@@ -35,6 +35,10 @@ static void test_rename_file(void) {
     mimic_fat_init(&lfs_pico_flash_config);
     mimic_fat_create_cache();
 
+    uint16_t fat_sectors = fat_sector_size((const struct lfs_config *)&lfs_pico_flash_config);
+    uint32_t first_fat_sector = 1;
+    uint32_t root_dir_sector = fat_sectors + 1;
+
     // Update procedure from the USB layer
     uint8_t buffer[512];
     uint16_t cluster = 2;
@@ -47,7 +51,7 @@ static void test_rename_file(void) {
         {.DIR_Name = "RENAMED TXT", .DIR_Attr = 0x20, .DIR_FstClusLO = 2, .DIR_FileSize = strlen(MESSAGE)},
     };
     root0[1].DIR_Name[0] = 0xE5;
-    tud_msc_write10_cb(0, 2, 0, root0, sizeof(root0));  // update directory entry
+    tud_msc_write10_cb(0, root_dir_sector, 0, root0, sizeof(root0));  // update directory entry
 
     reload();
 
@@ -73,6 +77,10 @@ static void test_rename_file_windows11(void) {
     mimic_fat_init(&lfs_pico_flash_config);
     mimic_fat_create_cache();
 
+    uint16_t fat_sectors = fat_sector_size((const struct lfs_config *)&lfs_pico_flash_config);
+    uint32_t first_fat_sector = 1;
+    uint32_t root_dir_sector = fat_sectors + 1;
+
     // Update procedure from the USB layer
     uint8_t buffer[512];
     uint16_t cluster = 2;
@@ -82,7 +90,7 @@ static void test_rename_file_windows11(void) {
         {.DIR_Name = "littlefsUSB", .DIR_Attr = 0x08, .DIR_FstClusLO = 0, .DIR_FileSize = 0},
         {.DIR_Name = "RENAMED TXT", .DIR_Attr = 0x20, .DIR_FstClusLO = 2, .DIR_FileSize = strlen(MESSAGE)},
     };
-    tud_msc_write10_cb(0, 2, 0, root0, sizeof(root0));  // update directory entry
+    tud_msc_write10_cb(0, root_dir_sector, 0, root0, sizeof(root0));  // update directory entry
 
     reload();
 

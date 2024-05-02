@@ -99,7 +99,7 @@ int main(void) {
     tud_init(BOARD_TUD_RHPORT);
     stdio_init_all();
 
-    test_filesystem_and_format_if_necessary(true);
+    test_filesystem_and_format_if_necessary(false);
     while (true) {
         sensor_logging_task();
         tud_task();

@@ -37,7 +37,7 @@ static void test_create_file(void) {
 
     // Create procedure from the USB layer
 
-    uint16_t fat_sectors = fat_sector_size((struct lfs_config *)&lfs_pico_flash_config);
+    uint16_t fat_sectors = fat_sector_size((const struct lfs_config *)&lfs_pico_flash_config);
     uint32_t first_fat_sector = 1;
     uint32_t root_dir_sector = fat_sectors + 1;
 
@@ -75,27 +75,32 @@ static void test_create_file_windows11(void) {
     const uint8_t message[] = "Hello World\n";
 
     setup();
+
+    mimic_fat_init(&lfs_pico_flash_config);
     mimic_fat_create_cache();
+
 
     // update dir entry. The cluster to which the file belongs is set to 0.
     fat_dir_entry_t root0[16] = {
         {.DIR_Name = "littlefsUSB", .DIR_Attr = 0x08, .DIR_FstClusLO = 0, .DIR_FileSize = 0},
         {.DIR_Name = "CREATE  TXT", .DIR_Attr = 0x20, .DIR_FstClusLO = 0, .DIR_FileSize = 0},
     };
-    tud_msc_write10_cb(0, 2, 0, root0, sizeof(root0));
+    uint16_t fat_sectors = fat_sector_size(&lfs_pico_flash_config);
+    uint32_t root_dir_sector = fat_sectors + 1;
+    tud_msc_write10_cb(0, root_dir_sector, 0, root0, sizeof(root0));
 
     // update dir entry. The cluster to be assigned is specified. Not yet allocated.
-    uint16_t cluster = 2;
+    uint16_t cluster = root_dir_sector + 1;
     fat_dir_entry_t root1[16] = {
         {.DIR_Name = "littlefsUSB", .DIR_Attr = 0x08, .DIR_FstClusLO = 0, .DIR_FileSize = 0},
         {.DIR_Name = "CREATE  TXT", .DIR_Attr = 0x20, .DIR_FstClusLO = cluster, .DIR_FileSize = strlen(message)},
     };
-    tud_msc_write10_cb(0, 2, 0, root1, sizeof(root1));
+    tud_msc_write10_cb(0, root_dir_sector, 0, root1, sizeof(root1));
 
     // write the file block to the cluster specified in step 2.
     memset(buffer, 0, sizeof(buffer));
     strncpy(buffer, message, sizeof(buffer));
-    tud_msc_write10_cb(0, cluster + 1, 0, buffer, sizeof(buffer));
+    tud_msc_write10_cb(0, cluster + fat_sectors, 0, buffer, sizeof(buffer));
 
     // update File allocation table
     uint8_t fat[512] = {0xF8, 0xFF, 0xFF, 0x00, 0x00};
@@ -123,19 +128,21 @@ static void test_create_accross_blocksize(void) {
                               "Hello World\n";  //512 byte + "Hello World\n"
 
     setup();
+
+    mimic_fat_init(&lfs_pico_flash_config);
     mimic_fat_create_cache();
 
-    uint16_t fat_sectors = fat_sector_size((struct lfs_config *)&lfs_pico_flash_config);
+    uint16_t fat_sectors = fat_sector_size(&lfs_pico_flash_config);
     uint32_t first_fat_sector = 1;
     uint32_t root_dir_sector = fat_sectors + 1;
 
     // Update procedure from the USB layer
     uint16_t cluster = root_dir_sector + 1;
     memcpy(buffer, message, sizeof(buffer));
-    tud_msc_write10_cb(0, cluster + 1, 0, buffer, sizeof(buffer));  // write to first block
+    tud_msc_write10_cb(0, cluster + fat_sectors, 0, buffer, sizeof(buffer));  // write to first block
     memset(buffer, 0, sizeof(buffer));
     strncpy(buffer, message + 512, sizeof(buffer));
-    tud_msc_write10_cb(0, cluster + 2, 0, buffer, sizeof(buffer));  // write to 2nd block
+    tud_msc_write10_cb(0, cluster + fat_sectors + 1, 0, buffer, sizeof(buffer));  // write to 2nd block
 
     uint8_t fat[512] = {0xF8, 0xFF, 0xFF, 0x00, 0x00};
     update_fat(fat, cluster, cluster + 1);  // point next cluster
