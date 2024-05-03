@@ -1,6 +1,7 @@
 #include "tests.h"
 #include <bsp/board.h>
 #include <tusb.h>
+#include "onboard_led.h"
 
 
 #define ANSI_GREEN  "\e[32m"
@@ -10,6 +11,7 @@ int main(void) {
     board_init();
     tud_init(BOARD_TUD_RHPORT);
     stdio_init_all();
+    onboard_led_init();
 
     printf("Start all tests\n");
 

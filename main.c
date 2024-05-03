@@ -91,6 +91,17 @@ static void sensor_logging_task(void) {
         test_filesystem_and_format_if_necessary(true);
         count = 0;
         long_push = 0;
+        onboard_led(true);
+        sleep_ms(200);
+        onboard_led(false);
+        sleep_ms(200);
+        onboard_led(true);
+        sleep_ms(200);
+        onboard_led(false);
+        sleep_ms(200);
+        onboard_led(true);
+        sleep_ms(200);
+        onboard_led(false);
     }
 }
 

@@ -1214,6 +1214,13 @@ static uint32_t find_base_cluster_and_offset(uint32_t cluster, size_t *offset) {
         return 0;
     }
 
+    // reset search cache
+    if (base_cluster_cache.cluster + 1 != cluster) {
+        base_cluster_cache.cluster = 0;
+        base_cluster_cache.base_cluster = 0;
+        base_cluster_cache.offset = 0;
+    }
+
     *offset = 0;
     while (find_limit-- > 0) {
         is_exists = false;
@@ -1232,6 +1239,7 @@ static uint32_t find_base_cluster_and_offset(uint32_t cluster, size_t *offset) {
                     base_cluster_cache.offset = *offset;
                     return base_cluster_cache.base_cluster;
                 }
+
                 break;
             }
         }
