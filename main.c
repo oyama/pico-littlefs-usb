@@ -96,12 +96,13 @@ static void sensor_logging_task(void) {
 
 int main(void) {
     //set_sys_clock_khz(250000, false);
+
     board_init();
     tud_init(BOARD_TUD_RHPORT);
     stdio_init_all();
     onboard_led_init();
 
-    test_filesystem_and_format_if_necessary(true);
+    test_filesystem_and_format_if_necessary(false);
     while (true) {
         sensor_logging_task();
         tud_task();

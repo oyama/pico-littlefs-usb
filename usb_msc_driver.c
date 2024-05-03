@@ -115,15 +115,12 @@ int32_t tud_msc_scsi_cb(uint8_t lun, uint8_t const scsi_cmd[16], void *buffer, u
 
 void tud_mount_cb(void) {
     printf("\e[45mmount\e[0m\n");
-    onboard_led(true);
     /*
      * NOTE:
      * This callback must be returned immediately. Time-consuming processing
      * here will cause TinyUSB to PANIC `ep 0 in was already available`.
      */
     is_initialized = false;
-
-    onboard_led(false);
 }
 
 void tud_suspend_cb(bool remote_wakeup_en) {

@@ -10,8 +10,7 @@
 #include <lfs.h>
 
 
-#define FS_SIZE (1.8 * 1024 * 1024)
-//#define FS_SIZE (64 * 1024)
+#define FS_SIZE (1.5 * 1024 * 1024)
 
 
 static uint32_t fs_base(const struct lfs_config *c) {
