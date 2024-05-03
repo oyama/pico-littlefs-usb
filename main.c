@@ -17,7 +17,7 @@
 #include <tusb.h>
 #include <lfs.h>
 #include "bootsel_button.h"
-
+#include "onboard_led.h"
 #include "mimic_fat.h"
 
 
@@ -99,8 +99,9 @@ int main(void) {
     board_init();
     tud_init(BOARD_TUD_RHPORT);
     stdio_init_all();
+    onboard_led_init();
 
-    test_filesystem_and_format_if_necessary(false);
+    test_filesystem_and_format_if_necessary(true);
     while (true) {
         sensor_logging_task();
         tud_task();

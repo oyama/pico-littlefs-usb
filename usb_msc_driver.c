@@ -6,6 +6,7 @@
  */
 #include <tusb.h>
 #include "mimic_fat.h"
+#include "onboard_led.h"
 
 
 extern const struct lfs_config lfs_pico_flash_config;
@@ -56,6 +57,7 @@ int32_t tud_msc_read10_cb(uint8_t lun, uint32_t lba, uint32_t offset, void* buff
     (void)lun;
     (void)offset;
 
+    onboard_led(true);
     if (!is_initialized) {
         mimic_fat_init(&lfs_pico_flash_config);
         mimic_fat_update_usb_device_is_enabled(true);
@@ -63,6 +65,8 @@ int32_t tud_msc_read10_cb(uint8_t lun, uint32_t lba, uint32_t offset, void* buff
         is_initialized = true;
     }
     mimic_fat_read(lun, lba, buffer, bufsize);
+    onboard_led(false);
+
     return (int32_t)bufsize;
 }
 
@@ -74,7 +78,9 @@ bool tud_msc_is_writable_cb (uint8_t lun) {
 int32_t tud_msc_write10_cb(uint8_t lun, uint32_t lba, uint32_t offset, uint8_t* buffer, uint32_t bufsize) {
     (void)offset;
 
+    onboard_led(true);
     mimic_fat_write(lun, lba, buffer, bufsize);
+    onboard_led(false);
     return bufsize;
 }
 
@@ -109,18 +115,23 @@ int32_t tud_msc_scsi_cb(uint8_t lun, uint8_t const scsi_cmd[16], void *buffer, u
 
 void tud_mount_cb(void) {
     printf("\e[45mmount\e[0m\n");
+    onboard_led(true);
     /*
      * NOTE:
      * This callback must be returned immediately. Time-consuming processing
      * here will cause TinyUSB to PANIC `ep 0 in was already available`.
      */
     is_initialized = false;
+
+    onboard_led(false);
 }
 
 void tud_suspend_cb(bool remote_wakeup_en) {
     (void)remote_wakeup_en;
 
     printf("\e[45msuspend\e[0m\n");
+    onboard_led(true);
     mimic_fat_cleanup_cache();
     mimic_fat_update_usb_device_is_enabled(false);
+    onboard_led(false);
 }

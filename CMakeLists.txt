@@ -12,6 +12,7 @@ pico_sdk_init()
 
 add_executable(littlefs-usb
   main.c
+  onboard_led.c
   littlefs_driver.c
   usb_msc_driver.c
   usb_descriptors.c
@@ -27,6 +28,12 @@ target_link_libraries(littlefs-usb PRIVATE
   tinyusb_board
   tinyusb_device
 )
+if(${PICO_BOARD} STREQUAL "pico_w")
+  target_compile_options(littlefs-usb PRIVATE -DPICO_BOARD_PICO_W)
+  target_link_libraries(littlefs-usb PRIVATE pico_cyw43_arch_none)
+  target_compile_options(pico_cyw43_arch_none INTERFACE -Wno-unused-parameter)
+endif()
+
 target_include_directories(littlefs-usb
   PRIVATE
   vendor/littlefs
@@ -35,7 +42,6 @@ target_include_directories(littlefs-usb
 target_compile_options(littlefs-usb PRIVATE -Werror -Wall -Wextra -Wnull-dereference)
 target_link_options(littlefs-usb PRIVATE -Wl,--print-memory-usage)
 
-target_compile_options(pico_cyw43_arch_none INTERFACE -Wno-unused-parameter)
 
 add_library(littlefs INTERFACE)
 target_sources(littlefs INTERFACE
