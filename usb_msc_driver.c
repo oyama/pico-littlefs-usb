@@ -75,11 +75,11 @@ int32_t tud_msc_write10_cb(uint8_t lun, uint32_t lba, uint32_t offset, uint8_t* 
     (void)offset;
 
     mimic_fat_write(lun, lba, buffer, bufsize);
-    return (int32_t) bufsize;
+    return bufsize;
 }
 
-int32_t tud_msc_scsi_cb (uint8_t lun, uint8_t const scsi_cmd[16], void* buffer, uint16_t bufsize) {
-    void const* response = NULL;
+int32_t tud_msc_scsi_cb(uint8_t lun, uint8_t const scsi_cmd[16], void *buffer, uint16_t bufsize) {
+    void const *response = NULL;
     int32_t resplen = 0;
 
     // most scsi handled is input

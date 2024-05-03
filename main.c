@@ -95,6 +95,7 @@ static void sensor_logging_task(void) {
 }
 
 int main(void) {
+    //set_sys_clock_khz(250000, false);
     board_init();
     tud_init(BOARD_TUD_RHPORT);
     stdio_init_all();

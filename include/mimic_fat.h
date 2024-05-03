@@ -11,6 +11,7 @@
 #include <math.h>
 #include <lfs.h>
 #include "unicode.h"
+#include <pico/stdlib.h>
 
 #define LITTLE_ENDIAN16(x) (x)
 #define LITTLE_ENDIAN32(x) (x)

@@ -62,7 +62,8 @@ static void test_read_large_file(size_t file_size) {
 
     size_t remind = file_size;
     size_t total_written = 0;
-    int last_percent = 0;
+    size_t segment_size = file_size / 10;
+    size_t next_segment_threshold = segment_size;
     while (remind > 0) {
         size_t chunk = remind % sizeof(buffer) ? remind % sizeof(buffer) : sizeof(buffer);
         uint32_t *b = (uint32_t *)buffer;
@@ -74,10 +75,9 @@ static void test_read_large_file(size_t file_size) {
         remind = remind - size;
 
         total_written += size;
-        int current_percent = (int)((total_written * 100) / file_size);
-        if (current_percent / 10 > last_percent / 10) {
+        if (total_written >= next_segment_threshold || remind == 0) {
             printf(".");
-            last_percent = current_percent;
+            next_segment_threshold += segment_size;
         }
     }
     rc = lfs_file_close(&fs, &f);
@@ -106,7 +106,8 @@ static void test_read_large_file(size_t file_size) {
     uint32_t file_sector = root_dir_sector + 1;
     remind = file_size;
     total_written = 0;
-    last_percent = 0;
+    segment_size = file_size / 10;
+    next_segment_threshold = segment_size;
     while (remind > 0) {
         size_t chunk = remind % sizeof(buffer) ? remind % sizeof(buffer) : sizeof(buffer);
         char expected[512] = {0};
@@ -117,19 +118,12 @@ static void test_read_large_file(size_t file_size) {
         tud_msc_read10_cb(0, file_sector, 0, buffer, sizeof(buffer));
         file_sector++;
         remind = remind - chunk;
-        if (memcmp(expected, buffer, chunk) != 0) {
-            printf("\n");
-            print_block(expected, 512); printf("\n");
-            print_block(buffer, 512); printf("\n");
-
-        }
         assert(memcmp(expected, buffer, chunk) == 0);
 
         total_written += chunk;
-        int current_percent = (int)((total_written * 100) / file_size);
-        if (current_percent / 10 > last_percent / 10) {
+        if (total_written >= next_segment_threshold || remind == 0) {
             printf(".");
-            last_percent = current_percent;
+            next_segment_threshold += segment_size;
         }
     }
 
@@ -138,7 +132,7 @@ static void test_read_large_file(size_t file_size) {
 
 
 void test_large_file(void) {
-    printf("read 512 bytes file ");
+    printf("read 512 bytes file .");
     test_read_large_file(512);
     printf(" ok\n");
 
