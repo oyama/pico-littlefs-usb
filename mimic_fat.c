@@ -473,6 +473,16 @@ static bool is_short_filename_file(uint8_t *filename) {
     return true;
 }
 
+static void to_uppercase(char *str) {
+    if (str == NULL)
+        return;
+
+    while (*str) {
+        *str = toupper((unsigned char) *str);
+        str++;
+    }
+}
+
 static bool is_short_filename_dir(uint8_t *filename) {
     uint8_t buffer[LFS_NAME_MAX + 1];
     strncpy((char *)buffer, (const char *)filename, sizeof(buffer));
@@ -502,6 +512,7 @@ static void create_shortened_short_filename(uint8_t *sfn, const char *long_filen
     (void)name;
     char *ext = strtok(NULL, ".");
     ext[3] = '\0';
+    to_uppercase(ext);
     snprintf((char *)filename, sizeof(filename), "FIL~%04X%-3s", rand() % 0xFFFF, ext);
     memcpy(sfn, filename, FAT_SHORT_NAME_MAX);
 }
@@ -941,7 +952,7 @@ static void delete_directory(const char *path) {
 
         snprintf((char *)filename, sizeof(filename), "%s/%s", path, finfo.name);
         if (finfo.type == LFS_TYPE_DIR)
-            delete_directory(filename);
+            delete_directory((const char *)filename);
         err = lfs_remove(&real_filesystem, (const char *)filename);
         if (err != LFS_ERR_OK) {
             printf("delete_directory: lfs_remove('%s') error=%d\n", filename, err);
@@ -976,7 +987,7 @@ void mimic_fat_cleanup_cache(void) {
         }
 
         snprintf((char *)filename, sizeof(filename), "%s/%s", ".mimic", finfo.name);
-        delete_directory(filename);
+        delete_directory((const char *)filename);
     }
     lfs_dir_close(&real_filesystem, &dir);
 }
@@ -1221,7 +1232,6 @@ static uint32_t find_base_cluster_and_offset(uint32_t cluster, size_t *offset) {
                     base_cluster_cache.offset = *offset;
                     return base_cluster_cache.base_cluster;
                 }
-
                 break;
             }
         }
@@ -1789,25 +1799,46 @@ static void update_file_entry(uint32_t cluster, void *buffer, uint32_t bufsize,
                               find_dir_entry_cache_result_t *result, size_t offset)
 {
     save_temporary_file(cluster, buffer);
-    //print_block(buffer, 512);
+    if (!result->is_found)
+        return;
 
-    if (result->is_found) {
-        lfs_file_t f;
-        int err = lfs_file_open(&real_filesystem, &f, result->path, LFS_O_RDWR|LFS_O_CREAT);
+    TRACE(ANSI_RED "lfs_file_open('%s', cluster=%lu, offset=%u)\n" ANSI_CLEAR, result->path, cluster, offset);
+    lfs_file_t f;
+    int err;
+    if (offset == 0) {
+        err = lfs_file_open(&real_filesystem, &f, result->path, LFS_O_WRONLY|LFS_O_CREAT|LFS_O_TRUNC);
         if (err != LFS_ERR_OK) {
             printf("update_file_entry: lfs_file_open('%s') error=%d\n", result->path, err);
             return;
         }
-
+    } else {
+        err = lfs_file_open(&real_filesystem, &f, result->path, LFS_O_WRONLY);
+        if (err != LFS_ERR_OK) {
+            printf("update_file_entry: lfs_file_open('%s') error=%d\n", result->path, err);
+            return;
+        }
         lfs_file_seek(&real_filesystem, &f, offset * DISK_SECTOR_SIZE, LFS_SEEK_SET);
-        lfs_file_write(&real_filesystem, &f, buffer, bufsize);
+    }
+
+    lfs_ssize_t size = lfs_file_write(&real_filesystem, &f, buffer, bufsize);
+    if (size < 0 || size != 512) {
+        printf("update_file_entry: lfs_file_write('%s') error=%ld\n", result->path, size);
+        lfs_file_close(&real_filesystem, &f);
+        return;
+    }
+
+    if ((1 + offset) * 512 >= result->size) {
         err = lfs_file_truncate(&real_filesystem, &f, result->size);
         if (err != LFS_ERR_OK) {
-            printf("update_file_entry: lfs_file_truncate error=%d\n", err);
+            printf("update_file_entry: lfs_file_truncate('%s') error=%d\n", result->path, err);
             lfs_file_close(&real_filesystem, &f);
             return;
         }
-        lfs_file_close(&real_filesystem, &f);
+    }
+    err = lfs_file_close(&real_filesystem, &f);
+    if (err != LFS_ERR_OK) {
+        printf("update_file_entry: lfs_file_close('%s') error=%d\n", result->path, err);
+        return;
     }
 }
 
