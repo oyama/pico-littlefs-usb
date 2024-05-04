@@ -17,7 +17,6 @@
 #include <tusb.h>
 #include <lfs.h>
 #include "bootsel_button.h"
-#include "onboard_led.h"
 #include "mimic_fat.h"
 
 
@@ -47,7 +46,6 @@ static void test_filesystem_and_format_if_necessary(bool force_format) {
    if (force_format || (lfs_mount(&fs, &lfs_pico_flash_config) != 0)) {
         printf("Format the onboard flash memory with littlefs\n");
 
-        lfs_unmount(&fs);
         lfs_format(&fs, &lfs_pico_flash_config);
         lfs_mount(&fs, &lfs_pico_flash_config);
 
@@ -55,6 +53,10 @@ static void test_filesystem_and_format_if_necessary(bool force_format) {
         lfs_file_open(&fs, &f, "README.TXT", LFS_O_RDWR|LFS_O_CREAT);
         lfs_file_write(&fs, &f, README_TXT, strlen(README_TXT));
         lfs_file_close(&fs, &f);
+
+        if (mimic_fat_usb_device_is_enabled()) {
+            mimic_fat_create_cache();
+        }
     }
 }
 
@@ -91,17 +93,6 @@ static void sensor_logging_task(void) {
         test_filesystem_and_format_if_necessary(true);
         count = 0;
         long_push = 0;
-        onboard_led(true);
-        sleep_ms(200);
-        onboard_led(false);
-        sleep_ms(200);
-        onboard_led(true);
-        sleep_ms(200);
-        onboard_led(false);
-        sleep_ms(200);
-        onboard_led(true);
-        sleep_ms(200);
-        onboard_led(false);
     }
 }
 
@@ -111,7 +102,6 @@ int main(void) {
     board_init();
     tud_init(BOARD_TUD_RHPORT);
     stdio_init_all();
-    onboard_led_init();
 
     test_filesystem_and_format_if_necessary(false);
     while (true) {

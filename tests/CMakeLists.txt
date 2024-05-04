@@ -6,7 +6,6 @@ add_executable(tests
   ../unicode.c
   ../usb_msc_driver.c
   ../usb_descriptors.c
-  ../onboard_led.c
   main.c
   util.c
   test_create.c
@@ -27,10 +26,6 @@ target_link_libraries(tests PRIVATE
   tinyusb_board
   tinyusb_device
 )
-if(${PICO_BOARD} STREQUAL "pico_w")
-  target_compile_options(tests PRIVATE -DPICO_BOARD_PICO_W)
-  target_link_libraries(tests PRIVATE pico_cyw43_arch_none)
-endif()
 
 target_include_directories(tests
   PRIVATE
