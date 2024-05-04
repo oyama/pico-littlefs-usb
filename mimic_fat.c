@@ -145,14 +145,9 @@ static void print_dir_entry(void *buffer) {
         if ((dir->DIR_Attr & 0x0F) != 0x0F) {
             memcpy(pbuffer, &dir->DIR_Name, 11);
             pbuffer[11] = '\0';
-            TRACE("name='%s' attr=0x%02X timeTenth=%u, CrtDate=%u,%u"
-                   " writeDateTime=%u,%u LstAccDate=%u Size=%lu cluster=%u\n",
+            TRACE("name='%s' attr=0x%02X size=%lu cluster=%u\n",
                    pbuffer,
                    dir->DIR_Attr,
-                   dir->DIR_CrtTimeTenth,
-                   dir->DIR_CrtDate, dir->DIR_CrtTime,
-                   dir->DIR_WrtDate, dir->DIR_WrtTime,
-                   dir->DIR_LstAccDate,
                    dir->DIR_FileSize,
                    dir->DIR_FstClusLO);
         } else {
@@ -164,7 +159,8 @@ static void print_dir_entry(void *buffer) {
             utf16le[13] = '\0';
             char utf8[13 * 4 + 1];
             utf16le_to_utf8(utf8, sizeof(utf8), utf16le, 13);
-            TRACE("name='%s' attr=0x%02X ord=0x%02X cluster=%u\n", utf8, lfn->LDIR_Attr, lfn->LDIR_Ord, dir->DIR_FstClusLO);
+            TRACE("name='%s' attr=0x%02X ord=0x%02X checksum=%u  cluster=%u\n",
+                  utf8, lfn->LDIR_Attr, lfn->LDIR_Ord, lfn->LDIR_Chksum, dir->DIR_FstClusLO);
         }
         dir++;
     }
@@ -535,40 +531,9 @@ static uint8_t filename_check_sum(const uint8_t *filename) {
 }
 
 static void set_LFN_name123(fat_lfn_t *dir, const uint16_t *filename) {
-    size_t l;
-    l = strlen_utf16le(filename, FAT_LONG_FILENAME_CHUNK_MAX);
-
     memcpy(&dir->LDIR_Name1, filename + 0, sizeof(uint16_t) * 5);
     memcpy(&dir->LDIR_Name2, filename + 5, sizeof(uint16_t) * 6);
     memcpy(&dir->LDIR_Name3, filename + 5+6, sizeof(uint16_t) * 2);
-    for (int i = 0; i < 5*2; i += 2) {
-        if (dir->LDIR_Name1[i] == 0x00 && dir->LDIR_Name1[i+1] == 0x00) {
-            dir->LDIR_Name1[i] = 0xFF;
-            dir->LDIR_Name1[i+1] = 0xFF;
-        }
-    }
-    for (int i = 0; i < 6*2; i += 2) {
-        if (dir->LDIR_Name2[i] == 0x00 && dir->LDIR_Name2[i+1] == 0x00) {
-            dir->LDIR_Name2[i] = 0xFF;
-            dir->LDIR_Name2[i+1] = 0xFF;
-        }
-    }
-    for (int i = 0; i < 2*2; i += 2) {
-        if (dir->LDIR_Name3[i] == 0x00 && dir->LDIR_Name3[i+1] == 0x00) {
-            dir->LDIR_Name3[i] = 0xFF;
-            dir->LDIR_Name3[i+1] = 0xFF;
-        }
-    }
-    if (l < FAT_LONG_FILENAME_CHUNK_MAX && l < 5) {
-        dir->LDIR_Name1[l * 2]     = 0x00;
-        dir->LDIR_Name1[l * 2 + 1] = 0x00;
-    } else if (l < FAT_LONG_FILENAME_CHUNK_MAX && l < FAT_SHORT_NAME_MAX) {
-        dir->LDIR_Name2[(l-5) * 2]     = 0x00;
-        dir->LDIR_Name2[(l-5) * 2 + 1] = 0x00;
-    } else if (l < FAT_LONG_FILENAME_CHUNK_MAX) {
-        dir->LDIR_Name3[(l-5-6) * 2]     = 0x00;
-        dir->LDIR_Name3[(l-5-6) * 2 + 1] = 0x00;
-    }
 }
 
 void set_volume_label_entry(fat_dir_entry_t *dir, const char *name) {
@@ -750,6 +715,15 @@ static fat_dir_entry_t *append_dir_entry_volume_label(fat_dir_entry_t *entry, co
     return entry;
 }
 
+static void long_filename_padding(uint16_t *filename, size_t length, size_t size) {
+    for (size_t i = length; i < size; i++) {
+        if (i == length)
+            filename[i] = 0x0000;
+        else
+            filename[i] = 0xFFFF;
+    }
+}
+
 static fat_dir_entry_t *append_dir_entry_directory(fat_dir_entry_t *entry, struct lfs_info *finfo, uint32_t cluster) {
     TRACE("append_dir_entry_directory '%s'\n", finfo->name);
 
@@ -767,14 +741,14 @@ static fat_dir_entry_t *append_dir_entry_directory(fat_dir_entry_t *entry, struc
 
         uint16_t filename[LFS_NAME_MAX + 1];
         size_t len = utf8_to_utf16le(filename, sizeof(filename), finfo->name, strlen(finfo->name));
+        long_filename_padding(filename, len, LFS_NAME_MAX + 1);
         int long_filename_num = floor((len - 1) / FAT_LONG_FILENAME_CHUNK_MAX);
 
         for (int i = long_filename_num; i >= 0; i--) {
             uint8_t order = i + 1;
-            uint16_t chunk[FAT_LONG_FILENAME_CHUNK_MAX + 1] = {0};
+            uint16_t chunk[FAT_LONG_FILENAME_CHUNK_MAX];
             uint16_t *head = (uint16_t *)&(filename[i * FAT_LONG_FILENAME_CHUNK_MAX]);
             memcpy(chunk, head, sizeof(chunk));
-            chunk[FAT_LONG_FILENAME_CHUNK_MAX] = '\0';
             if (i == long_filename_num)
                 order |= 0x40;
             set_long_file_entry(entry, chunk, order, check_sum);
@@ -800,14 +774,14 @@ static fat_dir_entry_t *append_dir_entry_file(fat_dir_entry_t *entry, struct lfs
 
         uint16_t filename[LFS_NAME_MAX + 1];
         size_t len = utf8_to_utf16le(filename, sizeof(filename), finfo->name, strlen(finfo->name));
+        long_filename_padding(filename, len, LFS_NAME_MAX + 1);
         int long_filename_num = floor((len - 1) / FAT_LONG_FILENAME_CHUNK_MAX);
 
         for (int i = long_filename_num; i >= 0; i--) {
             uint8_t order = i + 1;
-            uint16_t chunk[FAT_LONG_FILENAME_CHUNK_MAX + 1] = {0};
+            uint16_t chunk[FAT_LONG_FILENAME_CHUNK_MAX];
             uint16_t *head = (uint16_t *)&(filename[i * FAT_LONG_FILENAME_CHUNK_MAX]);
             memcpy(chunk, head, sizeof(chunk));
-            chunk[FAT_LONG_FILENAME_CHUNK_MAX] = '\0';
             if (i == long_filename_num)
                 order |= 0x40;
             set_long_file_entry(entry, chunk, order, check_sum);

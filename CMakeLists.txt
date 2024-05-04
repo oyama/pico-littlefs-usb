@@ -57,10 +57,8 @@ target_link_libraries(littlefs INTERFACE hardware_flash)
 pico_enable_stdio_usb(littlefs-usb 1)
 pico_add_extra_outputs(littlefs-usb)
 
-option(TRACE "Enable trace log" OFF)
-if(TRACE)
-  target_compile_options(littlefs-usb PRIVATE -DENABLE_TRACE)
-endif()
+target_compile_options(littlefs-usb PRIVATE -DENABLE_TRACE)
+
 
 find_program(OPENOCD openocd)
 if(OPENOCD)
