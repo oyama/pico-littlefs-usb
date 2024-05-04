@@ -14,21 +14,21 @@
 #include "mimic_fat.h"
 
 
-extern const uint32_t FLASH_BASE;
-
 void test_create(void);
 void test_read(void);
 void test_update(void);
 void test_rename(void);
 void test_move(void);
 void test_delete(void);
+void test_large_file();
 
 void print_block(uint8_t *buffer, size_t l);
 void print_dir_entry(void *buffer);
 
-void create_file(lfs_t *fs, const unsigned char *path, const unsigned char *content);
-void create_directory(lfs_t *fs, const unsigned char *path);
-void update_fat_table(uint8_t *buffer, uint16_t cluster, uint16_t value);
+void create_file(lfs_t *fs, const char *path, const char *content);
+void create_directory(lfs_t *fs, const char *path);
+void update_fat(uint8_t *buffer, uint16_t cluster, uint16_t value);
+uint16_t fat_sector_size(const struct lfs_config *c);
 
 int dirent_cmp(fat_dir_entry_t *a, fat_dir_entry_t *b);
 int dirent_cmp_lfn(fat_dir_entry_t *a, fat_dir_entry_t *b);

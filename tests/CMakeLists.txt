@@ -14,9 +14,10 @@ add_executable(tests
   test_rename.c
   test_move.c
   test_delete.c
+  test_large_file.c
 )
 
-target_link_libraries(tests
+target_link_libraries(tests PRIVATE
   hardware_flash
   hardware_sync
   littlefs
@@ -31,6 +32,8 @@ target_include_directories(tests
   ${CMAKE_CURRENT_LIST_DIR}/../include
 )
 #target_compile_options(tests PRIVATE -Werror -Wall -Wextra -Wnull-dereference)
+#target_compile_options(tests PRIVATE -DENABLE_TRACE)
+
 pico_add_extra_outputs(tests)
 pico_enable_stdio_usb(tests 1)
 

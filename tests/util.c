@@ -1,8 +1,8 @@
+#include <math.h>
 #include "tests.h"
 
 
 static const int FAT_SHORT_NAME_MAX = 11;
-static const int FAT_SHORT_8x3_MAX = 8 + 3 + 1;
 static const int FAT_LONG_FILENAME_CHUNK_MAX = 13;
 
 
@@ -24,7 +24,7 @@ void print_dir_entry(void *buffer) {
     uint8_t pbuffer[11+1];
     fat_dir_entry_t *dir = (fat_dir_entry_t *)buffer;
     printf("--------\n");
-    for (int i = 0; i < DISK_BLOCK_SIZE / sizeof(fat_dir_entry_t); i++) {
+    for (size_t i = 0; i < DISK_SECTOR_SIZE / sizeof(fat_dir_entry_t); i++) {
         if (dir->DIR_Name[0] == '\0') {
             break;
         }
@@ -32,7 +32,7 @@ void print_dir_entry(void *buffer) {
             memcpy(pbuffer, &dir->DIR_Name, 11);
             pbuffer[11] = '\0';
             printf("name='%s' attr=0x%02X timeTenth=%u, CrtDate=%u,%u"
-                   " writeDateTime=%u,%u LstAccDate=%u Size=%u cluster=%u\n",
+                   " writeDateTime=%u,%u LstAccDate=%u Size=%lu cluster=%u\n",
                    pbuffer,
                    dir->DIR_Attr,
                    dir->DIR_CrtTimeTenth,
@@ -49,15 +49,15 @@ void print_dir_entry(void *buffer) {
             memcpy(utf16le + 5 + 6, lfn->LDIR_Name3, 2*2);
             utf16le[13] = '\0';
             uint8_t utf8[13 * 4 + 1];
-            utf16le_to_utf8(utf8, sizeof(utf8), utf16le, 13);
+            utf16le_to_utf8((char *)utf8, sizeof(utf8), utf16le, 13);
             printf("name='%s' attr=0x%02X ord=0x%02X cluster=%u\n", utf8, lfn->LDIR_Attr, lfn->LDIR_Ord, dir->DIR_FstClusLO);
         }
         dir++;
     }
 }
 
-void update_fat_table(uint8_t *buffer, uint16_t cluster, uint16_t value) {
-    uint16_t offset = (uint16_t)floor((float)cluster + ((float)cluster / 2)) % DISK_BLOCK_SIZE;
+void update_fat(uint8_t *buffer, uint16_t cluster, uint16_t value) {
+    uint16_t offset = (uint16_t)floor((float)cluster + ((float)cluster / 2)) % DISK_SECTOR_SIZE;
     if (cluster & 0x01) {
         buffer[offset] = (buffer[offset] & 0x0F) | (value << 4);
         buffer[offset + 1] = value >> 4;
@@ -67,7 +67,13 @@ void update_fat_table(uint8_t *buffer, uint16_t cluster, uint16_t value) {
     }
 }
 
-void create_file(lfs_t *fs, const unsigned char *path, const unsigned char *content) {
+uint16_t fat_sector_size(const struct lfs_config *c) {
+    uint64_t storage_size = c->block_count * c->block_size;
+    uint32_t cluster_size = storage_size / (DISK_SECTOR_SIZE * 1);
+    return ceil((double)cluster_size / DISK_SECTOR_SIZE);
+}
+
+void create_file(lfs_t *fs, const char *path, const char *content) {
     lfs_file_t f;
     int err = lfs_file_open(fs, &f, path, LFS_O_RDWR|LFS_O_CREAT);
     assert(err == 0);
@@ -76,7 +82,7 @@ void create_file(lfs_t *fs, const unsigned char *path, const unsigned char *cont
     lfs_file_close(fs, &f);
 }
 
-void create_directory(lfs_t *fs, const unsigned char *path) {
+void create_directory(lfs_t *fs, const char *path) {
     int err = lfs_mkdir(fs, path);
     assert(err == 0);
 }
@@ -84,10 +90,9 @@ void create_directory(lfs_t *fs, const unsigned char *path) {
 void set_long_filename_entry(fat_lfn_t *ent, uint8_t *name, uint8_t order) {
     ent->LDIR_Ord = order;
     ent->LDIR_Attr = 0x0F;
-    ent->LDIR_Name1;
 
     uint16_t chunk[13];
-    size_t l = utf8_to_utf16le(chunk, sizeof(chunk), name, 13);
+    size_t l = utf8_to_utf16le(chunk, sizeof(chunk), (const char *)name, 13);
     memcpy(ent->LDIR_Name1, chunk + 0, sizeof(uint16_t) * 5);
     memcpy(ent->LDIR_Name2, chunk + 5, sizeof(uint16_t) * 6);
     memcpy(ent->LDIR_Name3, chunk + 5 + 6, sizeof(uint16_t) * 2);

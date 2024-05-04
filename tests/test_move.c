@@ -32,7 +32,12 @@ static void cleanup(void) {
 static void test_move_file(void) {
     setup();
 
-    mimic_fat_initialize_cache();
+    mimic_fat_init(&lfs_pico_flash_config);
+    mimic_fat_create_cache();
+
+    uint16_t fat_sectors = fat_sector_size((const struct lfs_config *)&lfs_pico_flash_config);
+    uint32_t first_fat_sector = 1;
+    uint32_t root_dir_sector = fat_sectors + 1;
 
     // Update procedure from the USB layer
     uint8_t buffer[512];
@@ -44,14 +49,14 @@ static void test_move_file(void) {
         {.DIR_Name = "MOVEME  TXT", .DIR_Attr = 0x20, .DIR_FstClusLO = 3, .DIR_FileSize = strlen(MESSAGE)},
     };
     root0[2].DIR_Name[0] = 0xE5;  // deletion flag
-    tud_msc_write10_cb(0, 2, 0, root0, sizeof(root0));  // update origin directory entry
+    tud_msc_write10_cb(0, root_dir_sector, 0, root0, sizeof(root0));  // update origin directory entry
 
     fat_dir_entry_t dir_a[16] = {
         {.DIR_Name = ".          ", .DIR_Attr = 0x10, .DIR_FstClusLO = 2, .DIR_FileSize = 0},
         {.DIR_Name = "..         ", .DIR_Attr = 0x10, .DIR_FstClusLO = 0, .DIR_FileSize = 0},
         {.DIR_Name = "MOVEME  TXT", .DIR_Attr = 0x20, .DIR_FstClusLO = 3, .DIR_FileSize = strlen(MESSAGE)},
     };
-    tud_msc_write10_cb(0, 3, 0, dir_a, sizeof(dir_a));  // update destination directory entry
+    tud_msc_write10_cb(0, fat_sectors + 2, 0, dir_a, sizeof(dir_a));  // update destination directory entry
 
     reload();
 

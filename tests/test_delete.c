@@ -40,7 +40,12 @@ static void cleanup(void) {
 static void test_delete_file(void) {
     setup_file();
 
-    mimic_fat_initialize_cache();
+    mimic_fat_init(&lfs_pico_flash_config);
+    mimic_fat_create_cache();
+
+    uint16_t fat_sectors = fat_sector_size((const struct lfs_config *)&lfs_pico_flash_config);
+    uint32_t first_fat_sector = 1;
+    uint32_t root_dir_sector = fat_sectors + 1;
 
     // Update procedure from the USB layer
     uint16_t cluster = 2;
@@ -52,12 +57,12 @@ static void test_delete_file(void) {
         {.DIR_Name = "DELETEMETXT", .DIR_Attr = 0x20, .DIR_FstClusLO = cluster, .DIR_FileSize = strlen(MESSAGE)},
     };
     root[1].DIR_Name[0] = 0xE5;  // delete flag
-    tud_msc_write10_cb(0, 2, 0, root, sizeof(root));  // update directory entry
+    tud_msc_write10_cb(0, root_dir_sector, 0, root, sizeof(root));  // update directory entry
 
     // update File allocation table
-    uint8_t fat_table[512] = {0xF8, 0xFF, 0xFF, 0xFF, 0x0F};  // With cluster 2 allocated
-    update_fat_table(fat_table, cluster, 0x000);
-    tud_msc_write10_cb(0, 1, 0, fat_table, sizeof(fat_table));  // update file allocated table
+    uint8_t fat[512] = {0xF8, 0xFF, 0xFF, 0xFF, 0x0F};  // With cluster 2 allocated
+    update_fat(fat, cluster, 0x000);
+    tud_msc_write10_cb(0, 1, 0, fat, sizeof(fat));  // update file allocated table
 
     reload();
 
@@ -72,7 +77,12 @@ static void test_delete_file(void) {
 static void test_delete_dir(void) {
     setup_dir();
 
-    mimic_fat_initialize_cache();
+    mimic_fat_init(&lfs_pico_flash_config);
+    mimic_fat_create_cache();
+
+    uint16_t fat_sectors = fat_sector_size((const struct lfs_config *)&lfs_pico_flash_config);
+    uint32_t first_fat_sector = 1;
+    uint32_t root_dir_sector = fat_sectors + 1;
 
     // Update procedure from the USB layer
     uint16_t cluster = 2;
@@ -84,7 +94,7 @@ static void test_delete_dir(void) {
         {.DIR_Name = "DIR_DEL    ", .DIR_Attr = 0x10, .DIR_FstClusLO = cluster, .DIR_FileSize = 0},
     };
     root[1].DIR_Name[0] = 0xE5;  // delete flag
-    tud_msc_write10_cb(0, 2, 0, root, sizeof(root));  // update directory entry
+    tud_msc_write10_cb(0, root_dir_sector, 0, root, sizeof(root));  // update directory entry
 
     reload();
 
